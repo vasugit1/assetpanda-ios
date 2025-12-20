@@ -22,8 +22,18 @@ class PortfolioStore: ObservableObject {
         // Optionally, save to disk for persistence
     }
     
+    func containsPortfolio(with assets: [Asset]) -> Bool {
+        portfolios.contains { $0.assets == assets }
+    }
+    
     func load() {
         // Optionally, implement disk loading here. For now, do nothing or reset.
         // portfolios = ...
+    }
+    
+    func deletePortfolio(_ portfolio: SavedPortfolio) {
+        if let index = portfolios.firstIndex(where: { $0.id == portfolio.id }) {
+            portfolios.remove(at: index)
+        }
     }
 }
