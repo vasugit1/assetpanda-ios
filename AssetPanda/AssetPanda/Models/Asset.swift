@@ -44,6 +44,7 @@ struct Asset: Identifiable, Codable, Equatable {
     var yieldRate: Double         // annual %, e.g. 1.5
     var investMonths: Int         // total months
     var inflation: Double?        // optional annual inflation %
+    var monthlyContribution: Double // dollars
 
     init(
         id: UUID = UUID(),
@@ -53,7 +54,8 @@ struct Asset: Identifiable, Codable, Equatable {
         growthRate: Double = 0,
         yieldRate: Double = 0,
         investMonths: Int = 0,
-        inflation: Double? = nil
+        inflation: Double? = nil,
+        monthlyContribution: Double = 0
     ) {
         self.id = id
         self.type = type
@@ -63,6 +65,7 @@ struct Asset: Identifiable, Codable, Equatable {
         self.yieldRate = yieldRate
         self.investMonths = max(0, investMonths)
         self.inflation = inflation
+        self.monthlyContribution = max(0, monthlyContribution)
     }
 }
 

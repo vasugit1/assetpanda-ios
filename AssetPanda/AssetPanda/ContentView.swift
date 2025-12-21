@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+//import SavedView
 //import AssetCardView
 //import NetWorthCalculator
 //import Asset
@@ -14,13 +15,13 @@ import Foundation
 struct ContentView: View {
     @StateObject private var store = PortfolioStore()
     @State private var showSavedPortfolios = false
+    @State private var showSavedView = false
     @State private var assets: [Asset] = [Asset()]
     @State private var calculatedTotal: Double? = nil
     @State private var savedMessage: String? = nil
     
-    @State private var selectedPortfolioId: UUID? = nil
-    @State private var portfolioToDelete: SavedPortfolio? = nil
-    @State private var showingDeleteAlert = false
+    @State private var showSavePrompt = false
+    @State private var savePortfolioName: String = ""
     
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -30,6 +31,7 @@ struct ContentView: View {
         return formatter
     }
     
+    /*
     private var portfolioPicker: some View {
         if !self.store.portfolios.isEmpty {
             return AnyView(
@@ -87,6 +89,7 @@ struct ContentView: View {
             }
         }
     }
+    */
     
     private var assetList: some View {
         ScrollView {
@@ -129,7 +132,8 @@ struct ContentView: View {
                         }
                         
                         Button(action: {
-                            self.saveCurrentPortfolio()
+                            self.showSavePrompt = true
+                            self.savePortfolioName = ""
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "heart.fill")
@@ -143,7 +147,7 @@ struct ContentView: View {
                         }
                         
                         Button(action: {
-                            self.assets = [Asset()]
+                            self.assets = self.assets.map { _ in Asset() }
                             self.calculatedTotal = nil
                             self.savedMessage = nil
                         }) {
@@ -164,12 +168,6 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                             .padding(.top)
                     }
-                    
-                    if let msg = self.savedMessage {
-                        Text(msg)
-                            .foregroundColor(.green)
-                            .padding(.top, 4)
-                    }
                 }
             }
         }
@@ -178,67 +176,6 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                
-                // Inserted Saved Portfolios chip row above "Your Assets"
-                if !store.portfolios.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Saved Portfolios")
-                            .font(.caption).bold()
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(store.portfolios.enumerated()), id: \.element.id) { index, portfolio in
-                                    let isSelected = selectedPortfolioId == portfolio.id
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                            .fill(Color(.systemBackground).opacity(isSelected ? 1.0 : 0.8))
-                                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-                                            )
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("Portfolio \(index + 1)")
-                                                .font(.callout.weight(.semibold))
-                                                .lineLimit(1)
-                                            Text(portfolio.savedDate.formatted(date: .abbreviated, time: .omitted))
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                                .lineLimit(1)
-                                            if !portfolio.assets.isEmpty {
-                                                Text("\(portfolio.assets.count) asset\(portfolio.assets.count == 1 ? "" : "s")")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                        .padding(.vertical, 7)
-                                        .padding(.horizontal, 12)
-                                    }
-                                    .frame(minWidth: 95, maxWidth: 130, minHeight: 44)
-                                    .scaleEffect(isSelected ? 1.08 : 1.0)
-                                    .onTapGesture {
-                                        selectedPortfolioId = portfolio.id
-                                        assets = portfolio.assets
-                                        calculatedTotal = nil
-                                        savedMessage = nil
-                                    }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            portfolioToDelete = portfolio
-                                            showingDeleteAlert = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .frame(maxHeight: 60)
-                        }
-                    }
-                    .padding(.top, 6)
-                }
                 
                 HStack {
                     Text("Your Assets")
@@ -251,14 +188,20 @@ struct ContentView: View {
                 
                 actionButtons
                 
+                if let msg = self.savedMessage {
+                    Text(msg)
+                        .foregroundColor(.green)
+                        .font(.footnote)
+                        .padding(.top, 4)
+                        .transition(.opacity)
+                        .animation(.easeInOut, value: savedMessage)
+                }
+                
                 Spacer(minLength: 16)
             }
             //.padding(.top)
             .onAppear {
                 self.store.load()
-                if selectedPortfolioId == nil, !store.portfolios.isEmpty {
-                    selectedPortfolioId = store.portfolios.last?.id
-                }
             }
             //.navigationTitle("AssetPanda")
             //.navigationBarTitleDisplayMode(.inline)
@@ -272,37 +215,95 @@ struct ContentView: View {
                     Text("AssetPanda")
                         .font(.system(size: 22, weight: .semibold))
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button(action: { self.showSavedPortfolios = true }) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: { self.showSavedView = true }) {
                         Image(systemName: "heart")
                     }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { self.assets.append(Asset()) }) {
                         Image(systemName: "plus")
                     }
                 }
             }
-        }
-        .alert("Delete Portfolio?", isPresented: $showingDeleteAlert, presenting: portfolioToDelete) { portfolio in
-            Button("Delete", role: .destructive) {
-                store.deletePortfolio(portfolio)
-                if selectedPortfolioId == portfolio.id {
-                    selectedPortfolioId = nil
-                }
+            .navigationDestination(isPresented: $showSavedView) {
+                SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
+                    self.assets = portfolio.assets
+                    self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: portfolio.assets)
+                    self.savedMessage = nil
+                    self.showSavedView = false
+                })
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This will permanently remove the saved portfolio.")
+            .sheet(isPresented: $showSavePrompt) {
+                SavePortfolioPrompt(
+                    portfolioCount: store.portfolios.count,
+                    portfolioName: $savePortfolioName,
+                    onCancel: {
+                        showSavePrompt = false
+                    },
+                    onSave: {
+                        let nameToUse = savePortfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Portfolio \(store.portfolios.count + 1)" : savePortfolioName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        if store.containsPortfolio(with: assets) {
+                            savedMessage = "Already saved!"
+                        } else {
+                            let portfolio = SavedPortfolio(name: nameToUse, assets: assets, savedDate: Date())
+                            store.save(portfolio: portfolio)
+                            savedMessage = "Saved!"
+                        }
+                        showSavePrompt = false
+                        
+                        // Clear savedMessage after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                savedMessage = nil
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        .alert("Delete Portfolio?", isPresented: $showSavedPortfolios) {
+            Button("OK") {}
         }
     }
+}
+
+struct SavePortfolioPrompt: View {
+    let portfolioCount: Int
+    @Binding var portfolioName: String
+    var onCancel: () -> Void
+    var onSave: () -> Void
     
-    private func saveCurrentPortfolio() {
-        if store.containsPortfolio(with: assets) {
-            savedMessage = "Already saved!"
-            return
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Save Portfolio")
+                    .font(.title2.bold())
+                    .padding(.top)
+                
+                TextField("e.g., Current Investments", text: $portfolioName)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .autocapitalization(.words)
+                    .disableAutocorrection(true)
+                
+                Spacer()
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave()
+                    }
+                    .disabled(portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
-        let portfolio = SavedPortfolio(assets: assets)
-        store.save(portfolio: portfolio)
-        savedMessage = "Saved!"
     }
 }
 

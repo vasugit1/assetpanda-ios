@@ -2,13 +2,16 @@ import Foundation
 import Combine
 import SwiftUI
 
+// The `name` property represents the user-supplied or auto-generated portfolio label.
 struct SavedPortfolio: Identifiable, Codable, Equatable {
     let id: UUID
+    let name: String
     let assets: [Asset]
     let savedDate: Date
     
-    init(id: UUID = UUID(), assets: [Asset], savedDate: Date = Date()) {
+    init(id: UUID = UUID(), name: String, assets: [Asset], savedDate: Date = Date()) {
         self.id = id
+        self.name = name
         self.assets = assets
         self.savedDate = savedDate
     }

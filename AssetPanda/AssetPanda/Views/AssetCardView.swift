@@ -3,6 +3,7 @@ import SwiftUI
 struct AssetCardView: View {
     @Binding var asset: Asset
     @State private var currentValueString: String = ""
+    @State private var monthlyContributionString: String = ""
     @State private var growthRateString: String = ""
     @State private var yieldRateString: String = ""
     @State private var investMonthsString: String = ""
@@ -10,14 +11,11 @@ struct AssetCardView: View {
     var onRemove: (() -> Void)? = nil
     
     private func updateFieldsFromAsset() {
-        currentValueString = String(format: "%.2f", asset.currentValue)
-        growthRateString = String(format: "%.2f", asset.growthRate)
-        if asset.yieldRate == 0 {
-            yieldRateString = ""
-        } else {
-            yieldRateString = String(format: "%.2f", asset.yieldRate)
-        }
-        investMonthsString = "\(asset.investMonths)"
+        currentValueString = asset.currentValue == 0 ? "" : String(format: "%.2f", asset.currentValue)
+        monthlyContributionString = asset.monthlyContribution == 0 ? "" : String(format: "%.2f", asset.monthlyContribution)
+        growthRateString = asset.growthRate == 0 ? "" : String(format: "%.2f", asset.growthRate)
+        yieldRateString = asset.yieldRate == 0 ? "" : String(format: "%.2f", asset.yieldRate)
+        investMonthsString = asset.investMonths == 0 ? "" : "\(asset.investMonths)"
         if let inflation = asset.inflation {
             inflationString = String(format: "%.2f", inflation)
         } else {
@@ -28,6 +26,13 @@ struct AssetCardView: View {
     private func commitCurrentValue() {
         if let value = Double(currentValueString) {
             asset.currentValue = max(0, value)
+        }
+    }
+    private func commitMonthlyContribution() {
+        if let value = Double(monthlyContributionString) {
+            asset.monthlyContribution = max(0, value)
+        } else {
+            asset.monthlyContribution = 0
         }
     }
     private func commitGrowthRate() {
@@ -60,6 +65,7 @@ struct AssetCardView: View {
         self.onRemove = onRemove
         // set initial values with empty string if zero
         _currentValueString = State(initialValue: asset.wrappedValue.currentValue == 0 ? "" : String(format: "%.2f", asset.wrappedValue.currentValue))
+        _monthlyContributionString = State(initialValue: asset.wrappedValue.monthlyContribution == 0 ? "" : String(format: "%.2f", asset.wrappedValue.monthlyContribution))
         _growthRateString = State(initialValue: asset.wrappedValue.growthRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.growthRate))
         _yieldRateString = State(initialValue: asset.wrappedValue.yieldRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.yieldRate))
         _investMonthsString = State(initialValue: asset.wrappedValue.investMonths == 0 ? "" : "\(asset.wrappedValue.investMonths)")
@@ -68,6 +74,7 @@ struct AssetCardView: View {
         } else {
             _inflationString = State(initialValue: "")
         }
+        updateFieldsFromAsset()
     }
 
     var body: some View {
@@ -93,17 +100,14 @@ struct AssetCardView: View {
                 }
             }
 
+            // Current Value row with location picker
             HStack(spacing: 12) {
-                // Container to constrain the width to about 50% of the HStack
-                HStack {
-                    TextField("Enter current value", text: $currentValueString, onCommit: commitCurrentValue)
-                        .keyboardType(.decimalPad)
-                        .onChange(of: currentValueString) { commitCurrentValue() }
-                        .textFieldStyle(.roundedBorder)
-                        .frame(minWidth: 0, maxWidth: .infinity)
-                        .layoutPriority(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                TextField("Enter current value", text: $currentValueString, onCommit: commitCurrentValue)
+                    .keyboardType(.decimalPad)
+                    .onChange(of: currentValueString) { commitCurrentValue() }
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .layoutPriority(1)
                 
                 Picker("Location", selection: $asset.location) {
                     ForEach(AssetLocation.allCases) { location in
@@ -113,6 +117,12 @@ struct AssetCardView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 140)
             }
+            
+            // Monthly Contribution row below Current Value
+            TextField("Monthly Contribution", text: $monthlyContributionString, onCommit: commitMonthlyContribution)
+                .keyboardType(.decimalPad)
+                .onChange(of: monthlyContributionString) { commitMonthlyContribution() }
+                .textFieldStyle(.roundedBorder)
 
             TextField("Annual growth rate (%)", text: $growthRateString, onCommit: commitGrowthRate)
                 .keyboardType(.decimalPad)
@@ -141,6 +151,9 @@ struct AssetCardView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.secondary, lineWidth: 1)
         )
+        .onChange(of: asset.id) { _ in
+            updateFieldsFromAsset()
+        }
         .padding(.horizontal)
     }
 }
