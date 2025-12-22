@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var showSavePrompt = false
     @State private var savePortfolioName: String = ""
 
+    @State private var scrollProxy: ScrollViewProxy? = nil
+
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -59,15 +61,6 @@ struct ContentView: View {
                     .background(Color.black.opacity(0.06))
                     .clipShape(Circle())
             }
-
-            // Right: Plus (Add Asset)
-            Button(action: { self.assets.append(Asset()) }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.06))
-                    .clipShape(Circle())
-            }
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -76,22 +69,38 @@ struct ContentView: View {
 
     // MARK: - Asset List (Scroll Content)
     private var assetList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
 
-                Text("Your Assets")
-                    .font(.title2.bold())
-                    .padding(.horizontal)
+                    Text("Your Assets")
+                        .font(.title2.bold())
+                        .padding(.horizontal)
 
-                ForEach(self.assets.indices, id: \.self) { idx in
-                    AssetCardView(
-                        asset: self.$assets[idx],
-                        onRemove: self.assets.count > 1 ? { self.assets.remove(at: idx) } : nil
-                    )
+                    ForEach(self.assets) { asset in
+                        if let idx = self.assets.firstIndex(where: { $0.id == asset.id }) {
+                            AssetCardView(
+                                asset: self.$assets[idx],
+                                onRemove: self.assets.count > 1 ? { self.assets.remove(at: idx) } : nil
+                            )
+                            .id(asset.id)
+                        }
+                    }
+                }
+                .padding(.top, 6)
+                .padding(.bottom, 12)
+            }
+            .onAppear {
+                self.scrollProxy = proxy
+            }
+            .onChange(of: assets.count) { oldValue, newValue in
+                // Scroll to last asset if added
+                if let last = assets.last {
+                    withAnimation {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
             }
-            .padding(.top, 6)
-            .padding(.bottom, 12)
         }
     }
 
@@ -179,6 +188,26 @@ struct ContentView: View {
 
                 assetList
 
+                Button {
+                    let newAsset = Asset()
+                    assets.append(newAsset)
+                    if let proxy = scrollProxy {
+                        withAnimation {
+                            proxy.scrollTo(newAsset.id, anchor: .bottom)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 56, height: 56)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
+                        .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                        .contentShape(Circle())
+                }
+                .padding(.vertical, 12)
+
                 actionButtons
 
                 if let msg = self.savedMessage {
@@ -233,6 +262,18 @@ struct ContentView: View {
                         }
                     }
                 )
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { print("Menu tapped") }) {
+                        Image(systemName: "line.3.horizontal")
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { self.showSavedView = true }) {
+                        Image(systemName: "heart")
+                    }
+                }
             }
         }
         .alert("Delete Portfolio?", isPresented: $showSavedPortfolios) {
