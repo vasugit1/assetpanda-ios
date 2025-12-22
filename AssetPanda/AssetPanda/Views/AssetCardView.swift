@@ -99,7 +99,16 @@ struct AssetCardView: View {
                 
                 Spacer()
                 
+                Picker("Location", selection: $asset.location) {
+                    ForEach(AssetLocation.allCases) { location in
+                        Text(location == .usa ? "USD" : "INR").tag(location)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
+
                 if onRemove != nil {
+                    Spacer().frame(width: 8)
                     Button {
                         onRemove?()
                     } label: {
@@ -110,7 +119,7 @@ struct AssetCardView: View {
                 }
             }
 
-            // Current Value row with location picker
+            // Current Value row with only the TextField
             HStack(spacing: 12) {
                 TextField("Enter current value", text: $currentValueString, onCommit: commitCurrentValue)
                     .keyboardType(.decimalPad)
@@ -118,14 +127,6 @@ struct AssetCardView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 0, maxWidth: .infinity)
                     .layoutPriority(1)
-                
-                Picker("Location", selection: $asset.location) {
-                    ForEach(AssetLocation.allCases) { location in
-                        Text(location == .usa ? "USD" : "INR").tag(location)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 140)
             }
             
             // Monthly Contribution row below Current Value
