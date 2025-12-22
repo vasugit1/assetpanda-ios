@@ -1,4 +1,13 @@
 import SwiftUI
+import Foundation
+
+extension View {
+    func hideKeyboard() {
+#if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#endif
+    }
+}
 
 struct AssetCardView: View {
     @Binding var asset: Asset
@@ -8,6 +17,7 @@ struct AssetCardView: View {
     @State private var yieldRateString: String = ""
     @State private var investMonthsString: String = ""
     @State private var inflationString: String = ""
+
     var onRemove: (() -> Void)? = nil
     
     private func updateFieldsFromAsset() {
@@ -151,7 +161,9 @@ struct AssetCardView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.secondary, lineWidth: 1)
         )
-        .onChange(of: asset.id) { _ in
+        .contentShape(Rectangle())
+        .onTapGesture { self.hideKeyboard() }
+        .onChange(of: asset.id) { oldValue, newValue in
             updateFieldsFromAsset()
         }
         .padding(.horizontal)
