@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var savePortfolioName: String = ""
 
     @State private var scrollProxy: ScrollViewProxy? = nil
+    
+    @State private var isCalculatePressed: Bool = false
 
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -29,6 +31,15 @@ struct ContentView: View {
         formatter.usesGroupingSeparator = true
         formatter.locale = Locale.current
         return formatter
+    }
+    
+    private var isAllAssetsEmpty: Bool {
+        assets.allSatisfy { asset in
+            asset.currentValue == 0 && asset.monthlyContribution == 0 && asset.investMonths == 0 && asset.growthRate == 0 && asset.yieldRate == 0 && asset.inflation == nil
+        }
+    }
+    private var isDefaultState: Bool {
+        assets.count == 1 && isAllAssetsEmpty && calculatedTotal == nil
     }
 
     // MARK: - Compact Header (Custom "Nav Bar")
@@ -106,77 +117,75 @@ struct ContentView: View {
 
     // MARK: - Actions
     private var actionButtons: some View {
-        Group {
-            if self.calculatedTotal == nil {
-                Button(action: {
-                    self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
-                }) {
-                    Text("Calculate")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-            } else {
-                VStack(spacing: 8) {
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
-                        }) {
-                            Text("Calculate")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, maxHeight: 44)
-                                .background(Color.accentColor)
-                                .foregroundStyle(.white)
-                                .cornerRadius(12)
-                        }
-
-                        Button(action: {
-                            self.showSavePrompt = true
-                            self.savePortfolioName = ""
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "heart.fill")
-                                Text("Save")
-                            }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, maxHeight: 44)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
-                        }
-
-                        Button(action: {
-                            // Reset to default: exactly one card
-                            self.assets = [Asset()]
-                            self.calculatedTotal = nil
-                            self.savedMessage = nil
-                        }) {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, maxHeight: 44)
-                                .background(Color.accentColor)
-                                .foregroundStyle(.white)
-                                .cornerRadius(12)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-
-                    if let total = self.calculatedTotal,
-                       let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
-                        Text("Future Value: \(formatted)")
-                            .font(.title2.bold())
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 6)
+        HStack(spacing: 12) {
+            Button(action: {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                let newAsset = Asset()
+                assets.append(newAsset)
+                if let proxy = scrollProxy {
+                    withAnimation {
+                        proxy.scrollTo(newAsset.id, anchor: .bottom)
                     }
                 }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                    Text("Add")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 44)
             }
+            .background(Color(.systemGray5))
+            .foregroundStyle(.primary)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
+            .opacity(1.0)
+            .disabled(false)
+
+            Button(action: {
+                isCalculatePressed = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isCalculatePressed = false
+                }
+                self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }) {
+                Text("Calculate")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .background(Color.accentColor)
+            .foregroundStyle(.white)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
+            .disabled(isAllAssetsEmpty)
+            .opacity(isAllAssetsEmpty ? 0.5 : 1.0)
+            .scaleEffect(isCalculatePressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.18), value: isCalculatePressed)
+
+            Button(action: {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                // Reset to default: exactly one card
+                self.assets = [Asset()]
+                self.calculatedTotal = nil
+                self.savedMessage = nil
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.counterclockwise")
+                    Text("Reset")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .background(Color(.systemGray5))
+            .foregroundStyle(.primary)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
+            .disabled(isDefaultState)
+            .opacity(isDefaultState ? 0.5 : 1.0)
         }
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
 
     var body: some View {
@@ -188,27 +197,16 @@ struct ContentView: View {
 
                 assetList
 
-                Button {
-                    let newAsset = Asset()
-                    assets.append(newAsset)
-                    if let proxy = scrollProxy {
-                        withAnimation {
-                            proxy.scrollTo(newAsset.id, anchor: .bottom)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .frame(width: 56, height: 56)
-                        .background(Color(.systemGray5))
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
-                        .contentShape(Circle())
-                }
-                .padding(.vertical, 12)
-
                 actionButtons
+
+                if let total = self.calculatedTotal,
+                   let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
+                    Text("Future Value: \(formatted)")
+                        .font(.title2.bold())
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+                        .padding(.horizontal)
+                }
 
                 if let msg = self.savedMessage {
                     Text(msg)
@@ -217,6 +215,7 @@ struct ContentView: View {
                         .padding(.top, 4)
                         .transition(.opacity)
                         .animation(.easeInOut, value: savedMessage)
+                        .padding(.horizontal)
                 }
 
                 Spacer(minLength: 16)
@@ -320,3 +319,4 @@ struct SavePortfolioPrompt: View {
 #Preview {
     ContentView()
 }
+
