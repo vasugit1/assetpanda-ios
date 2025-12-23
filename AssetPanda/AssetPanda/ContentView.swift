@@ -25,6 +25,9 @@ struct ContentView: View {
 
     @State private var scrollProxy: ScrollViewProxy? = nil
 
+    // NEW: Track collapsed cards by Asset ID
+    @State private var collapsedAssetIDs: Set<UUID> = []
+
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -101,9 +104,27 @@ struct ContentView: View {
 
                     ForEach(self.assets) { asset in
                         if let idx = self.assets.firstIndex(where: { $0.id == asset.id }) {
+
+                            let isCollapsed = collapsedAssetIDs.contains(asset.id)
+
                             AssetCardView(
                                 asset: self.$assets[idx],
-                                onRemove: self.assets.count > 1 ? { self.assets.remove(at: idx) } : nil
+                                isCollapsed: isCollapsed,
+                                onHeaderTap: {
+                                    // Dismiss keyboard if any field was active; then toggle collapse
+                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                                        if isCollapsed {
+                                            collapsedAssetIDs.remove(asset.id)
+                                        } else {
+                                            collapsedAssetIDs.insert(asset.id)
+                                        }
+                                    }
+                                },
+                                onRemove: self.assets.count > 1 ? {
+                                    // Remove the collapse state for this asset as well
+                                    collapsedAssetIDs.remove(asset.id)
+                                    self.assets.remove(at: idx)
+                                } : nil
                             )
                             .id(asset.id)
                         }
@@ -132,6 +153,9 @@ struct ContentView: View {
             Button(action: {
                 let newAsset = Asset()
                 assets.append(newAsset)
+
+                // By default, new card starts expanded (do nothing to collapsedAssetIDs)
+
                 if let proxy = scrollProxy {
                     withAnimation {
                         proxy.scrollTo(newAsset.id, anchor: .bottom)
@@ -165,6 +189,7 @@ struct ContentView: View {
             Button(action: {
                 // Reset to default: exactly one card
                 self.assets = [Asset()]
+                self.collapsedAssetIDs.removeAll()
                 self.calculatedTotal = nil
                 self.savedMessage = nil
             }) {
@@ -222,6 +247,7 @@ struct ContentView: View {
             .navigationDestination(isPresented: $showSavedView) {
                 SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
                     self.assets = portfolio.assets
+                    self.collapsedAssetIDs.removeAll()
                     self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: portfolio.assets)
                     self.savedMessage = nil
                     self.showSavedView = false
@@ -350,4 +376,3 @@ struct SavePortfolioPrompt: View {
 #Preview {
     ContentView()
 }
-

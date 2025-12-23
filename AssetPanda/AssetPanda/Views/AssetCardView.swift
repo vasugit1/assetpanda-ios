@@ -11,12 +11,8 @@ private extension AssetType {
         case .other: return Color.purple.opacity(0.16)
         }
     }
-    var fieldFocusedColor: Color {
-        fieldBaseColor.opacity(0.87)
-    }
-    var fieldUnfocusedColor: Color {
-        fieldBaseColor
-    }
+    var fieldFocusedColor: Color { fieldBaseColor.opacity(0.87) }
+    var fieldUnfocusedColor: Color { fieldBaseColor }
     var fieldFocusedBorder: Color { Color.accentColor.opacity(0.28) }
     var fieldUnfocusedBorder: Color { Color.secondary.opacity(0.14) }
 }
@@ -68,13 +64,24 @@ struct CardTextFieldStyle: ViewModifier {
                     .stroke(Color.black.opacity(isFocused ? 0.06 : 0.03), lineWidth: 2)
                     .blur(radius: 1.2)
                     .offset(y: 1)
-                    .mask(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(LinearGradient(colors: [Color.black, Color.clear], startPoint: .top, endPoint: .bottom)))
+                    .mask(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(
+                                LinearGradient(colors: [Color.black, Color.clear],
+                                               startPoint: .top,
+                                               endPoint: .bottom)
+                            )
+                    )
             )
     }
 }
 
 struct AssetCardView: View {
     @Binding var asset: Asset
+
+    // NEW: collapse/expand control from parent
+    let isCollapsed: Bool
+    let onHeaderTap: () -> Void
 
     @State private var currentValueString: String = ""
     @State private var monthlyContributionString: String = ""
@@ -86,7 +93,7 @@ struct AssetCardView: View {
     @FocusState private var focusedField: FocusableField?
 
     var onRemove: (() -> Void)? = nil
-    
+
     private var numberFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -97,31 +104,29 @@ struct AssetCardView: View {
         formatter.decimalSeparator = Locale.current.decimalSeparator ?? "."
         return formatter
     }
-    
+
     private func parseDecimal(_ input: String) -> Double? {
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
         let cleaned = input.replacingOccurrences(of: groupingSeparator, with: "")
         return Double(cleaned)
     }
-    
+
     private func formatNumber(_ value: Double) -> String {
         numberFormatter.string(from: NSNumber(value: value)) ?? String(value)
     }
-    
+
     private func updateCurrentValueString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-        
-        // Remove grouping separators for parsing
+
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
-        
+
         if newValue != currentValueString {
             currentValueString = newValue
         }
-        
+
         if let value = Double(cleanedInput) {
             asset.currentValue = max(0, value)
-            // If ends with decimal separator or empty, do not format to allow in-progress typing
             if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
                 let formatted = formatNumber(value)
                 if formatted != currentValueString && focusedField != .currentValue {
@@ -132,17 +137,17 @@ struct AssetCardView: View {
             asset.currentValue = 0
         }
     }
-    
+
     private func updateMonthlyContributionString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-        
+
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
-        
+
         if newValue != monthlyContributionString {
             monthlyContributionString = newValue
         }
-        
+
         if let value = Double(cleanedInput) {
             asset.monthlyContribution = max(0, value)
             if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
@@ -155,17 +160,17 @@ struct AssetCardView: View {
             asset.monthlyContribution = 0
         }
     }
-    
+
     private func updateGrowthRateString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-        
+
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
-        
+
         if newValue != growthRateString {
             growthRateString = newValue
         }
-        
+
         if let value = Double(cleanedInput) {
             asset.growthRate = value
             if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
@@ -178,17 +183,17 @@ struct AssetCardView: View {
             asset.growthRate = 0
         }
     }
-    
+
     private func updateYieldRateString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-        
+
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
-        
+
         if newValue != yieldRateString {
             yieldRateString = newValue
         }
-        
+
         if let value = Double(cleanedInput) {
             asset.yieldRate = value
             if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
@@ -201,17 +206,17 @@ struct AssetCardView: View {
             asset.yieldRate = 0
         }
     }
-    
+
     private func updateInflationString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-        
+
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
-        
+
         if newValue != inflationString {
             inflationString = newValue
         }
-        
+
         if let value = Double(cleanedInput) {
             asset.inflation = value
             if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
@@ -224,9 +229,8 @@ struct AssetCardView: View {
             asset.inflation = nil
         }
     }
-    
+
     private func updateInvestMonthsString(_ newValue: String) {
-        // For investMonths, only allow digits (no grouping, no decimal)
         let filtered = newValue.filter { $0.isNumber }
         if filtered != investMonthsString {
             investMonthsString = filtered
@@ -237,7 +241,7 @@ struct AssetCardView: View {
             asset.investMonths = 0
         }
     }
-    
+
     // MARK: - Sync UI strings from model
     private func updateFieldsFromAsset() {
         currentValueString = asset.currentValue == 0 ? "" : formatNumber(asset.currentValue)
@@ -247,8 +251,8 @@ struct AssetCardView: View {
         investMonthsString = asset.investMonths == 0 ? "" : "\(asset.investMonths)"
         inflationString = asset.inflation.map { formatNumber($0) } ?? ""
     }
-    
-    // MARK: - Commit helpers (format on submit)
+
+    // MARK: - Commit helpers
     private func commitCurrentValue() {
         if let value = parseDecimal(currentValueString) {
             asset.currentValue = max(0, value)
@@ -310,13 +314,32 @@ struct AssetCardView: View {
         }
     }
 
-    // MARK: - Init
-    public init(asset: Binding<Asset>, onRemove: (() -> Void)? = nil) {
+    // MARK: - Init (UPDATED SIGNATURE)
+    public init(
+        asset: Binding<Asset>,
+        isCollapsed: Bool,
+        onHeaderTap: @escaping () -> Void,
+        onRemove: (() -> Void)? = nil
+    ) {
         self._asset = asset
+        self.isCollapsed = isCollapsed
+        self.onHeaderTap = onHeaderTap
         self.onRemove = onRemove
 
-        _currentValueString = State(initialValue: asset.wrappedValue.currentValue == 0 ? "" : { let f = NumberFormatter(); f.numberStyle = .decimal; f.usesGroupingSeparator = true; f.maximumFractionDigits = 2; return f.string(from: NSNumber(value: asset.wrappedValue.currentValue)) ?? String(asset.wrappedValue.currentValue) }())
-        _monthlyContributionString = State(initialValue: asset.wrappedValue.monthlyContribution == 0 ? "" : { let f = NumberFormatter(); f.numberStyle = .decimal; f.usesGroupingSeparator = true; f.maximumFractionDigits = 2; return f.string(from: NSNumber(value: asset.wrappedValue.monthlyContribution)) ?? String(asset.wrappedValue.monthlyContribution) }())
+        _currentValueString = State(initialValue: asset.wrappedValue.currentValue == 0 ? "" : {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.usesGroupingSeparator = true
+            f.maximumFractionDigits = 2
+            return f.string(from: NSNumber(value: asset.wrappedValue.currentValue)) ?? String(asset.wrappedValue.currentValue)
+        }())
+        _monthlyContributionString = State(initialValue: asset.wrappedValue.monthlyContribution == 0 ? "" : {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.usesGroupingSeparator = true
+            f.maximumFractionDigits = 2
+            return f.string(from: NSNumber(value: asset.wrappedValue.monthlyContribution)) ?? String(asset.wrappedValue.monthlyContribution)
+        }())
         _growthRateString = State(initialValue: asset.wrappedValue.growthRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.growthRate))
         _yieldRateString = State(initialValue: asset.wrappedValue.yieldRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.yieldRate))
         _investMonthsString = State(initialValue: asset.wrappedValue.investMonths == 0 ? "" : "\(asset.wrappedValue.investMonths)")
@@ -326,10 +349,9 @@ struct AssetCardView: View {
     var body: some View {
         VStack(spacing: 14) {
 
-            // MARK: - Header row (Type + Currency + Remove)
+            // MARK: - Header row (Type + Currency + Remove + Collapse Toggle)
             HStack(spacing: 8) {
 
-                // Asset type picker should flex + truncate (not wrap)
                 Picker("Type", selection: $asset.type) {
                     ForEach(AssetType.allCases) { type in
                         Text(type.displayName).tag(type)
@@ -341,7 +363,6 @@ struct AssetCardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(2)
 
-                // Currency selector fixed width
                 Picker("Currency", selection: $asset.location) {
                     ForEach(AssetLocation.allCases) { location in
                         Text(location == .usa ? "USD" : "INR").tag(location)
@@ -351,7 +372,13 @@ struct AssetCardView: View {
                 .frame(width: 110, height: 28)
                 .layoutPriority(1)
 
-                // Remove button fixed width
+                // Chevron toggle indicator
+                Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 28)
+                    .accessibilityHidden(true)
+
                 if onRemove != nil {
                     Button {
                         onRemove?()
@@ -365,81 +392,81 @@ struct AssetCardView: View {
                     .layoutPriority(3)
                 }
             }
-
-            // MARK: - Fields
-            TextField("Enter current value", text: $currentValueString)
-                .keyboardType(.decimalPad)
-                .onChange(of: currentValueString) { _, newValue in
-                    updateCurrentValueString(newValue)
-                }
-                .onSubmit {
-                    commitCurrentValue()
-                }
-                .focused($focusedField, equals: .currentValue)
-                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .currentValue))
-                .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-            TextField("Monthly Contribution", text: $monthlyContributionString)
-                .keyboardType(.decimalPad)
-                .onChange(of: monthlyContributionString) { _, newValue in
-                    updateMonthlyContributionString(newValue)
-                }
-                .onSubmit {
-                    commitMonthlyContribution()
-                }
-                .focused($focusedField, equals: .monthlyContribution)
-                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
-                .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-            TextField("Annual growth rate (%)", text: $growthRateString)
-                .keyboardType(.decimalPad)
-                .onChange(of: growthRateString) { _, newValue in
-                    updateGrowthRateString(newValue)
-                }
-                .onSubmit {
-                    commitGrowthRate()
-                }
-                .focused($focusedField, equals: .growthRate)
-                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
-                .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-            HStack(spacing: 10) {
-                TextField("Annual yield (%) (optional)", text: $yieldRateString)
-                    .keyboardType(.decimalPad)
-                    .onChange(of: yieldRateString) { _, newValue in
-                        updateYieldRateString(newValue)
-                    }
-                    .onSubmit {
-                        commitYieldRate()
-                    }
-                    .focused($focusedField, equals: .yieldRate)
-                    .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
-                    .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-                TextField("Inflation (%) (optional)", text: $inflationString)
-                    .keyboardType(.decimalPad)
-                    .onChange(of: inflationString) { _, newValue in
-                        updateInflationString(newValue)
-                    }
-                    .onSubmit {
-                        commitInflation()
-                    }
-                    .focused($focusedField, equals: .inflation)
-                    .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
-                    .animation(.easeInOut(duration: 0.25), value: asset.type)
+            // Header is the collapse/expand tap target
+            .contentShape(Rectangle())
+            .onTapGesture {
+                hideKeyboard()
+                onHeaderTap()
             }
 
-            TextField("Investment months", text: $investMonthsString)
-                .keyboardType(.numberPad)
-                .onChange(of: investMonthsString) { _, newValue in
-                    updateInvestMonthsString(newValue)
+            // MARK: - Fields (collapsible)
+            if !isCollapsed {
+                VStack(spacing: 14) {
+
+                    TextField("Enter current value", text: $currentValueString)
+                        .keyboardType(.decimalPad)
+                        .onChange(of: currentValueString) { _, newValue in
+                            updateCurrentValueString(newValue)
+                        }
+                        .onSubmit { commitCurrentValue() }
+                        .focused($focusedField, equals: .currentValue)
+                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .currentValue))
+                        .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                    TextField("Monthly Contribution", text: $monthlyContributionString)
+                        .keyboardType(.decimalPad)
+                        .onChange(of: monthlyContributionString) { _, newValue in
+                            updateMonthlyContributionString(newValue)
+                        }
+                        .onSubmit { commitMonthlyContribution() }
+                        .focused($focusedField, equals: .monthlyContribution)
+                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
+                        .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                    TextField("Annual growth rate (%)", text: $growthRateString)
+                        .keyboardType(.decimalPad)
+                        .onChange(of: growthRateString) { _, newValue in
+                            updateGrowthRateString(newValue)
+                        }
+                        .onSubmit { commitGrowthRate() }
+                        .focused($focusedField, equals: .growthRate)
+                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
+                        .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                    HStack(spacing: 10) {
+                        TextField("Annual yield (%) (optional)", text: $yieldRateString)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: yieldRateString) { _, newValue in
+                                updateYieldRateString(newValue)
+                            }
+                            .onSubmit { commitYieldRate() }
+                            .focused($focusedField, equals: .yieldRate)
+                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
+                            .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                        TextField("Inflation (%) (optional)", text: $inflationString)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: inflationString) { _, newValue in
+                                updateInflationString(newValue)
+                            }
+                            .onSubmit { commitInflation() }
+                            .focused($focusedField, equals: .inflation)
+                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
+                            .animation(.easeInOut(duration: 0.25), value: asset.type)
+                    }
+
+                    TextField("Investment months", text: $investMonthsString)
+                        .keyboardType(.numberPad)
+                        .onChange(of: investMonthsString) { _, newValue in
+                            updateInvestMonthsString(newValue)
+                        }
+                        .onSubmit { commitInvestMonths() }
+                        .focused($focusedField, equals: .investMonths)
+                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .investMonths))
+                        .animation(.easeInOut(duration: 0.25), value: asset.type)
                 }
-                .onSubmit {
-                    commitInvestMonths()
-                }
-                .focused($focusedField, equals: .investMonths)
-                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .investMonths))
-                .animation(.easeInOut(duration: 0.25), value: asset.type)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(18)
         .background(
@@ -452,12 +479,14 @@ struct AssetCardView: View {
             .animation(.easeInOut(duration: 0.25), value: asset.type)
         )
         .contentShape(Rectangle())
+        // Keep your existing "tap to hide keyboard" for the overall card,
+        // but it won't collapse/expand unless the header is tapped.
         .onTapGesture { hideKeyboard() }
         .onAppear { updateFieldsFromAsset() }
         .onChange(of: asset.id) { _, _ in
             updateFieldsFromAsset()
         }
         .padding(.horizontal)
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: isCollapsed)
     }
 }
-
