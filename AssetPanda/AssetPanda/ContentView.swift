@@ -13,6 +13,8 @@ struct ContentView: View {
 
     @State private var showSavedPortfolios = false
     @State private var showSavedView = false
+    @State private var showSettingsView = false
+    @State private var showAboutView = false
 
     @State private var assets: [Asset] = [Asset()]
     @State private var calculatedTotal: Double? = nil
@@ -22,8 +24,6 @@ struct ContentView: View {
     @State private var savePortfolioName: String = ""
 
     @State private var scrollProxy: ScrollViewProxy? = nil
-    
-    @State private var isCalculatePressed: Bool = false
 
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -32,22 +32,31 @@ struct ContentView: View {
         formatter.locale = Locale.current
         return formatter
     }
-    
-    private var isAllAssetsEmpty: Bool {
-        assets.allSatisfy { asset in
-            asset.currentValue == 0 && asset.monthlyContribution == 0 && asset.investMonths == 0 && asset.growthRate == 0 && asset.yieldRate == 0 && asset.inflation == nil
-        }
-    }
-    private var isDefaultState: Bool {
-        assets.count == 1 && isAllAssetsEmpty && calculatedTotal == nil
-    }
 
     // MARK: - Compact Header (Custom "Nav Bar")
     private var compactHeader: some View {
         HStack(spacing: 12) {
 
-            // Left: Hamburger
-            Button(action: { print("Menu tapped") }) {
+            // Left: Hamburger Menu
+            Menu {
+                Button {
+                    self.showSavedView = true
+                } label: {
+                    Label("Saved Portfolios", systemImage: "heart.fill")
+                }
+
+                Button {
+                    self.showSettingsView = true
+                } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+
+                Button {
+                    self.showAboutView = true
+                } label: {
+                    Label("About Us", systemImage: "info.circle")
+                }
+            } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 18, weight: .semibold))
                     .frame(width: 40, height: 40)
@@ -65,7 +74,7 @@ struct ContentView: View {
             Spacer()
 
             // Right: Heart (Saved)
-            Button(action: { self.showSavedView = true }) {
+            Button(action: { self.showSavePrompt = true }) {
                 Image(systemName: "heart")
                     .font(.system(size: 18, weight: .semibold))
                     .frame(width: 40, height: 40)
@@ -104,7 +113,7 @@ struct ContentView: View {
             .onAppear {
                 self.scrollProxy = proxy
             }
-            .onChange(of: assets.count) { oldValue, newValue in
+            .onChange(of: assets.count) { _, _ in
                 // Scroll to last asset if added
                 if let last = assets.last {
                     withAnimation {
@@ -117,9 +126,8 @@ struct ContentView: View {
 
     // MARK: - Actions
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             Button(action: {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 let newAsset = Asset()
                 assets.append(newAsset)
                 if let proxy = scrollProxy {
@@ -128,61 +136,47 @@ struct ContentView: View {
                     }
                 }
             }) {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Image(systemName: "plus")
                     Text("Add")
                 }
                 .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color(.systemGray5))
+                .foregroundStyle(.primary)
+                .cornerRadius(12)
             }
-            .background(Color(.systemGray5))
-            .foregroundStyle(.primary)
-            .cornerRadius(12)
-            .contentShape(Rectangle())
-            .opacity(1.0)
-            .disabled(false)
 
             Button(action: {
-                isCalculatePressed = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    isCalculatePressed = false
-                }
                 self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }) {
                 Text("Calculate")
                     .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
             }
-            .background(Color.accentColor)
-            .foregroundStyle(.white)
-            .cornerRadius(12)
-            .contentShape(Rectangle())
-            .disabled(isAllAssetsEmpty)
-            .opacity(isAllAssetsEmpty ? 0.5 : 1.0)
-            .scaleEffect(isCalculatePressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.18), value: isCalculatePressed)
 
             Button(action: {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 // Reset to default: exactly one card
                 self.assets = [Asset()]
                 self.calculatedTotal = nil
                 self.savedMessage = nil
             }) {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Image(systemName: "arrow.counterclockwise")
                     Text("Reset")
                 }
                 .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color(.systemGray5))
+                .foregroundStyle(.primary)
+                .cornerRadius(12)
             }
-            .background(Color(.systemGray5))
-            .foregroundStyle(.primary)
-            .cornerRadius(12)
-            .contentShape(Rectangle())
-            .disabled(isDefaultState)
-            .opacity(isDefaultState ? 0.5 : 1.0)
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -192,11 +186,8 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
 
-                // Custom compact header (replaces the system nav bar)
                 compactHeader
-
                 assetList
-
                 actionButtons
 
                 if let total = self.calculatedTotal,
@@ -224,6 +215,8 @@ struct ContentView: View {
                 self.store.load()
             }
             .navigationBarHidden(true) // Hide the system navigation bar
+
+            // Saved Portfolios
             .navigationDestination(isPresented: $showSavedView) {
                 SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
                     self.assets = portfolio.assets
@@ -232,6 +225,17 @@ struct ContentView: View {
                     self.showSavedView = false
                 })
             }
+
+            // Settings
+            .navigationDestination(isPresented: $showSettingsView) {
+                SettingsView()
+            }
+
+            // About
+            .navigationDestination(isPresented: $showAboutView) {
+                AboutUsView()
+            }
+
             .sheet(isPresented: $showSavePrompt) {
                 SavePortfolioPrompt(
                     portfolioCount: store.portfolios.count,
@@ -253,7 +257,6 @@ struct ContentView: View {
 
                         showSavePrompt = false
 
-                        // Clear savedMessage after 2 seconds
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             withAnimation {
                                 savedMessage = nil
@@ -261,18 +264,6 @@ struct ContentView: View {
                         }
                     }
                 )
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { print("Menu tapped") }) {
-                        Image(systemName: "line.3.horizontal")
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { self.showSavedView = true }) {
-                        Image(systemName: "heart")
-                    }
-                }
             }
         }
         .alert("Delete Portfolio?", isPresented: $showSavedPortfolios) {
@@ -319,4 +310,3 @@ struct SavePortfolioPrompt: View {
 #Preview {
     ContentView()
 }
-
