@@ -79,9 +79,10 @@ struct CardTextFieldStyle: ViewModifier {
 struct AssetCardView: View {
     @Binding var asset: Asset
 
-    // NEW: collapse/expand control from parent
     let isCollapsed: Bool
     let onHeaderTap: () -> Void
+
+    @State private var showAdvanced: Bool = false
 
     @State private var currentValueString: String = ""
     @State private var monthlyContributionString: String = ""
@@ -118,12 +119,9 @@ struct AssetCardView: View {
     private func updateCurrentValueString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
 
-        if newValue != currentValueString {
-            currentValueString = newValue
-        }
+        if newValue != currentValueString { currentValueString = newValue }
 
         if let value = Double(cleanedInput) {
             asset.currentValue = max(0, value)
@@ -141,12 +139,9 @@ struct AssetCardView: View {
     private func updateMonthlyContributionString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
 
-        if newValue != monthlyContributionString {
-            monthlyContributionString = newValue
-        }
+        if newValue != monthlyContributionString { monthlyContributionString = newValue }
 
         if let value = Double(cleanedInput) {
             asset.monthlyContribution = max(0, value)
@@ -164,12 +159,9 @@ struct AssetCardView: View {
     private func updateGrowthRateString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
 
-        if newValue != growthRateString {
-            growthRateString = newValue
-        }
+        if newValue != growthRateString { growthRateString = newValue }
 
         if let value = Double(cleanedInput) {
             asset.growthRate = value
@@ -187,12 +179,9 @@ struct AssetCardView: View {
     private func updateYieldRateString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
 
-        if newValue != yieldRateString {
-            yieldRateString = newValue
-        }
+        if newValue != yieldRateString { yieldRateString = newValue }
 
         if let value = Double(cleanedInput) {
             asset.yieldRate = value
@@ -210,12 +199,9 @@ struct AssetCardView: View {
     private func updateInflationString(_ newValue: String) {
         let decimalSeparator = numberFormatter.decimalSeparator ?? "."
         let groupingSeparator = numberFormatter.groupingSeparator ?? ","
-
         let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
 
-        if newValue != inflationString {
-            inflationString = newValue
-        }
+        if newValue != inflationString { inflationString = newValue }
 
         if let value = Double(cleanedInput) {
             asset.inflation = value
@@ -232,9 +218,7 @@ struct AssetCardView: View {
 
     private func updateInvestMonthsString(_ newValue: String) {
         let filtered = newValue.filter { $0.isNumber }
-        if filtered != investMonthsString {
-            investMonthsString = filtered
-        }
+        if filtered != investMonthsString { investMonthsString = filtered }
         if let value = Int(filtered) {
             asset.investMonths = max(0, value)
         } else if filtered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -242,7 +226,6 @@ struct AssetCardView: View {
         }
     }
 
-    // MARK: - Sync UI strings from model
     private func updateFieldsFromAsset() {
         currentValueString = asset.currentValue == 0 ? "" : formatNumber(asset.currentValue)
         monthlyContributionString = asset.monthlyContribution == 0 ? "" : formatNumber(asset.monthlyContribution)
@@ -252,7 +235,6 @@ struct AssetCardView: View {
         inflationString = asset.inflation.map { formatNumber($0) } ?? ""
     }
 
-    // MARK: - Commit helpers
     private func commitCurrentValue() {
         if let value = parseDecimal(currentValueString) {
             asset.currentValue = max(0, value)
@@ -314,7 +296,6 @@ struct AssetCardView: View {
         }
     }
 
-    // MARK: - Init (UPDATED SIGNATURE)
     public init(
         asset: Binding<Asset>,
         isCollapsed: Bool,
@@ -349,7 +330,6 @@ struct AssetCardView: View {
     var body: some View {
         VStack(spacing: 14) {
 
-            // MARK: - Header row (Type + Currency + Remove + Collapse Toggle)
             HStack(spacing: 8) {
 
                 Picker("Type", selection: $asset.type) {
@@ -372,7 +352,6 @@ struct AssetCardView: View {
                 .frame(width: 110, height: 28)
                 .layoutPriority(1)
 
-                // Chevron toggle indicator
                 Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -380,9 +359,7 @@ struct AssetCardView: View {
                     .accessibilityHidden(true)
 
                 if onRemove != nil {
-                    Button {
-                        onRemove?()
-                    } label: {
+                    Button { onRemove?() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
                             .frame(width: 28, height: 28)
@@ -392,14 +369,12 @@ struct AssetCardView: View {
                     .layoutPriority(3)
                 }
             }
-            // Header is the collapse/expand tap target
             .contentShape(Rectangle())
             .onTapGesture {
                 hideKeyboard()
                 onHeaderTap()
             }
 
-            // MARK: - Fields (collapsible)
             if !isCollapsed {
                 VStack(spacing: 14) {
 
@@ -413,49 +388,10 @@ struct AssetCardView: View {
                         .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .currentValue))
                         .animation(.easeInOut(duration: 0.25), value: asset.type)
 
-                    TextField("Monthly Contribution", text: $monthlyContributionString)
-                        .keyboardType(.decimalPad)
-                        .onChange(of: monthlyContributionString) { _, newValue in
-                            updateMonthlyContributionString(newValue)
-                        }
-                        .onSubmit { commitMonthlyContribution() }
-                        .focused($focusedField, equals: .monthlyContribution)
-                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
-                        .animation(.easeInOut(duration: 0.25), value: asset.type)
+                    
 
-                    TextField("Annual growth rate (%)", text: $growthRateString)
-                        .keyboardType(.decimalPad)
-                        .onChange(of: growthRateString) { _, newValue in
-                            updateGrowthRateString(newValue)
-                        }
-                        .onSubmit { commitGrowthRate() }
-                        .focused($focusedField, equals: .growthRate)
-                        .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
-                        .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-                    HStack(spacing: 10) {
-                        TextField("Annual yield (%) (optional)", text: $yieldRateString)
-                            .keyboardType(.decimalPad)
-                            .onChange(of: yieldRateString) { _, newValue in
-                                updateYieldRateString(newValue)
-                            }
-                            .onSubmit { commitYieldRate() }
-                            .focused($focusedField, equals: .yieldRate)
-                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
-                            .animation(.easeInOut(duration: 0.25), value: asset.type)
-
-                        TextField("Inflation (%) (optional)", text: $inflationString)
-                            .keyboardType(.decimalPad)
-                            .onChange(of: inflationString) { _, newValue in
-                                updateInflationString(newValue)
-                            }
-                            .onSubmit { commitInflation() }
-                            .focused($focusedField, equals: .inflation)
-                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
-                            .animation(.easeInOut(duration: 0.25), value: asset.type)
-                    }
-
-                    TextField("Investment months", text: $investMonthsString)
+                    // MOVED UP: Investment months above growth rate
+                    TextField("Investment Period in months", text: $investMonthsString)
                         .keyboardType(.numberPad)
                         .onChange(of: investMonthsString) { _, newValue in
                             updateInvestMonthsString(newValue)
@@ -464,6 +400,79 @@ struct AssetCardView: View {
                         .focused($focusedField, equals: .investMonths)
                         .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .investMonths))
                         .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                    // Growth + Advanced toggle row
+                    HStack(spacing: 10) {
+                        TextField("Annual growth rate (%)", text: $growthRateString)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: growthRateString) { _, newValue in
+                                updateGrowthRateString(newValue)
+                            }
+                            .onSubmit { commitGrowthRate() }
+                            .focused($focusedField, equals: .growthRate)
+                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
+                            .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                        Button {
+                            hideKeyboard()
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                                showAdvanced.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("Advanced")
+                                    .font(.subheadline.weight(.semibold))
+                                Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.black.opacity(0.06))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showAdvanced ? "Hide advanced fields" : "Show advanced fields")
+                    }
+
+                    if showAdvanced {
+                        
+                        TextField("Monthly Contribution", text: $monthlyContributionString)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: monthlyContributionString) { _, newValue in
+                                updateMonthlyContributionString(newValue)
+                            }
+                            .onSubmit { commitMonthlyContribution() }
+                            .focused($focusedField, equals: .monthlyContribution)
+                            .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
+                            .animation(.easeInOut(duration: 0.25), value: asset.type)
+                        
+                        HStack(spacing: 10) {
+                            
+                            
+                            TextField("Annual yield (%) (optional)", text: $yieldRateString)
+                                .keyboardType(.decimalPad)
+                                .onChange(of: yieldRateString) { _, newValue in
+                                    updateYieldRateString(newValue)
+                                }
+                                .onSubmit { commitYieldRate() }
+                                .focused($focusedField, equals: .yieldRate)
+                                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
+                                .animation(.easeInOut(duration: 0.25), value: asset.type)
+
+                            TextField("Inflation (%) (optional)", text: $inflationString)
+                                .keyboardType(.decimalPad)
+                                .onChange(of: inflationString) { _, newValue in
+                                    updateInflationString(newValue)
+                                }
+                                .onSubmit { commitInflation() }
+                                .focused($focusedField, equals: .inflation)
+                                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
+                                .animation(.easeInOut(duration: 0.25), value: asset.type)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -479,8 +488,6 @@ struct AssetCardView: View {
             .animation(.easeInOut(duration: 0.25), value: asset.type)
         )
         .contentShape(Rectangle())
-        // Keep your existing "tap to hide keyboard" for the overall card,
-        // but it won't collapse/expand unless the header is tapped.
         .onTapGesture { hideKeyboard() }
         .onAppear { updateFieldsFromAsset() }
         .onChange(of: asset.id) { _, _ in
