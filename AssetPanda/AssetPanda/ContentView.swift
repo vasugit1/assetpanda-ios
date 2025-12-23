@@ -238,14 +238,19 @@ struct ContentView: View {
                 AboutUsView()
             }
 
-            .sheet(isPresented: $showSavePrompt) {
+            .sheet(isPresented: $showSavePrompt, onDismiss: {
+                showSavePrompt = false
+                savePortfolioName = ""
+            }) {
                 SavePortfolioPrompt(
                     portfolioCount: store.portfolios.count,
                     portfolioName: $savePortfolioName,
+                    existingNames: store.portfolios.map { $0.name },
                     onCancel: {
                         showSavePrompt = false
                     },
                     onSave: {
+                        // This closure is now called only if name is not duplicate (see SavePortfolioPrompt)
                         let trimmed = savePortfolioName.trimmingCharacters(in: .whitespacesAndNewlines)
                         let nameToUse = trimmed.isEmpty ? "Portfolio \(store.portfolios.count + 1)" : trimmed
 
@@ -266,6 +271,7 @@ struct ContentView: View {
                         }
                     }
                 )
+                .presentationDetents([.medium])
             }
         }
         .alert("Delete Portfolio?", isPresented: $showSavedPortfolios) {
@@ -278,8 +284,15 @@ struct ContentView: View {
 struct SavePortfolioPrompt: View {
     let portfolioCount: Int
     @Binding var portfolioName: String
+    let existingNames: [String]
     var onCancel: () -> Void
     var onSave: () -> Void
+
+    @FocusState private var nameFieldFocused: Bool
+    @State private var isDuplicateName: Bool = false
+
+    var normalizedName: String { portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    var nameIsDuplicate: Bool { existingNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.contains(normalizedName) }
 
     var body: some View {
         NavigationStack {
@@ -288,21 +301,46 @@ struct SavePortfolioPrompt: View {
                     .font(.title2.bold())
                     .padding(.top)
 
-                TextField("e.g., Current Investments", text: $portfolioName)
+                TextField("Enter name (e.g., 2025 Plan & Beyond)", text: $portfolioName)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
                     .autocapitalization(.words)
                     .disableAutocorrection(true)
+                    .focused($nameFieldFocused)
+
+                if isDuplicateName {
+                    Text("A portfolio with this name already exists.")
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                }
+
+                Text("Give this portfolio a name so you can easily find it later.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
 
                 Spacer()
+            }
+            .onAppear {
+                self.nameFieldFocused = true
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onCancel() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave() }
-                        .disabled(portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Save") {
+                        if nameIsDuplicate {
+                            isDuplicateName = true
+                            return
+                        }
+                        isDuplicateName = false
+                        onSave()
+                    }
+                    .disabled(portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || nameIsDuplicate)
                 }
             }
         }
@@ -312,3 +350,4 @@ struct SavePortfolioPrompt: View {
 #Preview {
     ContentView()
 }
+
