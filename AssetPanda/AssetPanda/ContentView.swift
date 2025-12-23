@@ -25,7 +25,7 @@ struct ContentView: View {
 
     @State private var scrollProxy: ScrollViewProxy? = nil
 
-    // ✅ Restore minimize/expand: track collapsed cards by ID
+    // ✅ Minimize/expand: track collapsed cards by ID
     @State private var collapsedAssetIDs: Set<UUID> = []
 
     // ✅ Future value details sheet
@@ -44,7 +44,6 @@ struct ContentView: View {
     private var compactHeader: some View {
         HStack(spacing: 12) {
 
-            // Left: Hamburger Menu
             Menu {
                 Button { self.showSavedView = true } label: {
                     Label("Saved Portfolios", systemImage: "heart.fill")
@@ -67,14 +66,12 @@ struct ContentView: View {
 
             Spacer()
 
-            // Center: Title
             Text("AssetPanda")
                 .font(.system(size: 22, weight: .semibold))
                 .lineLimit(1)
 
             Spacer()
 
-            // Right: Heart (Saved) only if calculatedTotal != nil
             if calculatedTotal != nil {
                 Button(action: { self.showSavePrompt = true }) {
                     Image(systemName: store.containsPortfolio(with: assets) ? "heart.fill" : "heart")
@@ -119,7 +116,6 @@ struct ContentView: View {
                                     }
                                 },
                                 onRemove: self.assets.count > 1 ? {
-                                    // Remove by id (safer than capturing idx)
                                     if let removeIndex = self.assets.firstIndex(where: { $0.id == assetId }) {
                                         self.assets.remove(at: removeIndex)
                                     }
@@ -133,14 +129,10 @@ struct ContentView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 12)
             }
-            .onAppear {
-                self.scrollProxy = proxy
-            }
+            .onAppear { self.scrollProxy = proxy }
             .onChange(of: assets.count) { _, _ in
                 if let last = assets.last {
-                    withAnimation {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
         }
@@ -154,9 +146,7 @@ struct ContentView: View {
                 let newAsset = Asset()
                 assets.append(newAsset)
                 if let proxy = scrollProxy {
-                    withAnimation {
-                        proxy.scrollTo(newAsset.id, anchor: .bottom)
-                    }
+                    withAnimation { proxy.scrollTo(newAsset.id, anchor: .bottom) }
                 }
             }) {
                 HStack(spacing: 6) {
@@ -218,8 +208,13 @@ struct ContentView: View {
                    let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
 
                     Button {
+                        // ✅ Add asset type to the breakdown label
                         breakdownRows = assets.enumerated().map { (idx, a) in
-                            FutureValueBreakdownRow(label: "Asset \(idx + 1)", value: NetWorthCalculator.futureValue(for: a))
+                            let typeName = a.type.displayName
+                            return FutureValueBreakdownRow(
+                                label: "Asset \(idx + 1) (\(typeName))",
+                                value: NetWorthCalculator.futureValue(for: a)
+                            )
                         }
                         showFutureValueDetails = true
                     } label: {
@@ -262,30 +257,24 @@ struct ContentView: View {
             .onAppear { self.store.load() }
             .navigationBarHidden(true)
 
-            // Saved Portfolios
             .navigationDestination(isPresented: $showSavedView) {
                 SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
                     self.assets = portfolio.assets
                     self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: portfolio.assets)
                     self.savedMessage = nil
                     self.showSavedView = false
-
-                    // optional: expand all on load
                     self.collapsedAssetIDs.removeAll()
                 })
             }
 
-            // Settings
             .navigationDestination(isPresented: $showSettingsView) {
                 SettingsView()
             }
 
-            // About
             .navigationDestination(isPresented: $showAboutView) {
                 AboutUsView()
             }
 
-            // Save prompt sheet
             .sheet(isPresented: $showSavePrompt, onDismiss: {
                 showSavePrompt = false
                 savePortfolioName = ""
@@ -404,6 +393,8 @@ struct FutureValueDetailsView: View {
     let breakdown: [FutureValueBreakdownRow]
     let total: Double
 
+    private let monthColWidth: CGFloat = 56 // ✅ narrower month column
+
     private var currencyFormatter: NumberFormatter {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -472,50 +463,63 @@ struct FutureValueDetailsView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.headline.weight(.bold)) // ✅ bigger
+            .font(.headline.weight(.bold))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(Color.black.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
+    // ✅ Month column narrower + other columns moved left (not full width)
     private func amortizationTable(rows: [AmortizationRow]) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
 
-            // Header Row (bigger)
-            HStack {
-                Text("Month").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Principal").frame(maxWidth: .infinity, alignment: .trailing)
-                Text("Interest").frame(maxWidth: .infinity, alignment: .trailing)
-                Text("Total").frame(maxWidth: .infinity, alignment: .trailing)
+            // Header Row
+            HStack(spacing: 6) {   // ⬅️ reduced spacing
+                Text("Month")
+                    .frame(width: 44, alignment: .center)   // ⬅️ narrower + centered
+
+                Text("Principal")
+                    .frame(width: 95, alignment: .trailing)
+
+                Text("Interest")
+                    .frame(width: 85, alignment: .trailing)
+
+                Text("Total")
+                    .frame(width: 110, alignment: .trailing)
+
+                Spacer(minLength: 0)
             }
-            .font(.subheadline.weight(.semibold)) // ✅ bigger than caption
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
 
             Divider()
 
-            // Data Rows (bigger)
+            // Data Rows
             ForEach(rows) { r in
-                HStack {
+                HStack(spacing: 6) {   // ⬅️ reduced spacing
                     Text("\(r.month)")
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: 44, alignment: .center) // ⬅️ centered month value
 
                     Text(currencyFormatter.string(from: NSNumber(value: r.contribution)) ?? "\(r.contribution)")
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .frame(width: 95, alignment: .trailing)
                         .monospacedDigit()
 
                     Text(currencyFormatter.string(from: NSNumber(value: r.interest)) ?? "\(r.interest)")
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .frame(width: 85, alignment: .trailing)
                         .monospacedDigit()
 
                     Text(currencyFormatter.string(from: NSNumber(value: r.endingTotal)) ?? "\(r.endingTotal)")
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .frame(width: 110, alignment: .trailing)
                         .monospacedDigit()
+
+                    Spacer(minLength: 0)
                 }
-                .font(.subheadline) // ✅ bigger
+                .font(.subheadline)
             }
         }
     }
+
 }
 
 #Preview {

@@ -1,100 +1,105 @@
 import Foundation
 
-// Put AmortizationRow in the model layer so both NetWorthCalculator + ContentView can use it.
+// Shared model used by ContentView amortization table
 struct AmortizationRow: Identifiable {
     let id = UUID()
     let month: Int
-    let contribution: Double     // total principal added across assets that month
-    let interest: Double         // total interest earned across assets that month
-    let endingTotal: Double      // total portfolio value after that month
+    let contribution: Double
+    let interest: Double
+    let endingTotal: Double
 }
 
 struct NetWorthCalculator {
 
-    /// Calculates the future value of a single asset using the provided formula.
+    /// Calculates the future value of a single asset.
     static func futureValue(for asset: Asset) -> Double {
 
-        // Convert INR to USD using the conversion rate 1 USD = 83 INR if asset is located in India
+        // Convert INR to USD if needed
         let principal: Double
         if asset.location == .india {
-            let usdValue = asset.currentValue / 83.0
-            principal = max(0, usdValue)
+            principal = max(0, asset.currentValue / 83.0)
         } else {
             principal = max(0, asset.currentValue)
         }
 
-        let n = max(0, asset.investMonths)
+        let months = max(0, asset.investMonths)
+        let monthlyContribution = max(0, asset.monthlyContribution)
 
-        // If yieldRate is 0 or unset (treated as 0), use 0 in calculation
         let yieldRate = asset.yieldRate == 0 ? 0 : asset.yieldRate
-
         var effectiveRate = (asset.growthRate + yieldRate) / 100.0
-
-        // If inflation is provided, subtract it (real return)
         if let inflation = asset.inflation {
             effectiveRate -= inflation / 100.0
         }
 
-        let r = effectiveRate
-        let M = asset.monthlyContribution
-
-        if r == 0 {
-            return principal + M * Double(n)
+        if effectiveRate == 0 {
+            return principal + monthlyContribution * Double(months)
         } else {
-            let monthlyRate = r / 12.0
-            let fv = principal * pow(1.0 + monthlyRate, Double(n))
-                + M * ((pow(1.0 + monthlyRate, Double(n)) - 1) / monthlyRate)
-            return fv
+            let monthlyRate = effectiveRate / 12.0
+            return principal * pow(1 + monthlyRate, Double(months))
+                + monthlyContribution * ((pow(1 + monthlyRate, Double(months)) - 1) / monthlyRate)
         }
     }
 
-    /// Calculates the rounded total future value for an array of assets.
+    /// Calculates total future value across all assets
     static func calculateFutureValue(for assets: [Asset]) -> Double {
         let total = assets.reduce(0) { $0 + futureValue(for: $1) }
         return (total * 100).rounded() / 100
     }
 
-    /// Combined portfolio amortization (one schedule for ALL assets merged).
-    /// Each asset grows + contributes only for its own investMonths; then it stops (consistent with your FV model).
+    /// ✅ Combined amortization schedule for ALL assets
+    /// Includes Month 0 (starting balances)
     static func portfolioAmortizationSchedule(for assets: [Asset]) -> [AmortizationRow] {
 
         let maxMonths = assets.map { max(0, $0.investMonths) }.max() ?? 0
         if maxMonths == 0 { return [] }
 
-        // Per-asset running balances
+        // Track running balances per asset
         var balances: [UUID: Double] = [:]
         balances.reserveCapacity(assets.count)
 
-        // Initialize principal per asset using same India->USD logic
-        for a in assets {
+        // Initialize starting principal per asset
+        for asset in assets {
             let principal: Double
-            if a.location == .india {
-                principal = max(0, a.currentValue / 83.0)
+            if asset.location == .india {
+                principal = max(0, asset.currentValue / 83.0)
             } else {
-                principal = max(0, a.currentValue)
+                principal = max(0, asset.currentValue)
             }
-            balances[a.id] = principal
+            balances[asset.id] = principal
         }
 
         var rows: [AmortizationRow] = []
-        rows.reserveCapacity(maxMonths)
+        rows.reserveCapacity(maxMonths + 1)
 
+        // ===== Month 0 (starting balances) =====
+        let startingTotal = balances.values.reduce(0, +)
+        rows.append(
+            AmortizationRow(
+                month: 0,
+                contribution: 0,
+                interest: 0,
+                endingTotal: startingTotal
+            )
+        )
+
+        // ===== Months 1...N =====
         for month in 1...maxMonths {
 
             var monthContributionTotal: Double = 0
             var monthInterestTotal: Double = 0
             var endingTotal: Double = 0
 
-            for a in assets {
-                let horizon = max(0, a.investMonths)
-                var balance = balances[a.id] ?? 0
+            for asset in assets {
+                let horizon = max(0, asset.investMonths)
+                var balance = balances[asset.id] ?? 0
 
                 if month <= horizon {
-                    let contribution = max(0, a.monthlyContribution)
 
-                    let yieldRate = a.yieldRate == 0 ? 0 : a.yieldRate
-                    var effectiveRate = (a.growthRate + yieldRate) / 100.0
-                    if let inflation = a.inflation {
+                    let contribution = max(0, asset.monthlyContribution)
+                    let yieldRate = asset.yieldRate == 0 ? 0 : asset.yieldRate
+
+                    var effectiveRate = (asset.growthRate + yieldRate) / 100.0
+                    if let inflation = asset.inflation {
                         effectiveRate -= inflation / 100.0
                     }
 
@@ -105,10 +110,10 @@ struct NetWorthCalculator {
                     monthInterestTotal += interest
 
                     balance = balance + interest + contribution
-                    balances[a.id] = balance
+                    balances[asset.id] = balance
                 }
 
-                endingTotal += (balances[a.id] ?? 0)
+                endingTotal += (balances[asset.id] ?? 0)
             }
 
             rows.append(
