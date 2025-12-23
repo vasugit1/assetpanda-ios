@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum AssetType: String, CaseIterable, Identifiable, Codable {
     case realEstate
@@ -16,6 +17,16 @@ enum AssetType: String, CaseIterable, Identifiable, Codable {
         case .cash: return "Cash"
         case .crypto: return "Crypto"
         case .other: return "Other"
+        }
+    }
+    
+    var cardBackgroundColor: Color {
+        switch self {
+        case .realEstate: return Color.gray.opacity(0.1)
+        case .stocks: return Color.blue.opacity(0.08)
+        case .cash: return Color.green.opacity(0.08)
+        case .crypto: return Color.orange.opacity(0.09)
+        case .other: return Color.purple.opacity(0.09)
         }
     }
 }

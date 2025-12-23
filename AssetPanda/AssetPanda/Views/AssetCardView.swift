@@ -1,6 +1,18 @@
 import SwiftUI
 import Foundation
 
+private extension AssetType {
+    var textFieldBackgroundColor: Color {
+        switch self {
+        case .realEstate: return Color.gray.opacity(0.11)
+        case .stocks: return Color.blue.opacity(0.1)
+        case .cash: return Color.green.opacity(0.1)
+        case .crypto: return Color.orange.opacity(0.1)
+        case .other: return Color.purple.opacity(0.1)
+        }
+    }
+}
+
 extension View {
     func hideKeyboard() {
 #if canImport(UIKit)
@@ -141,39 +153,85 @@ struct AssetCardView: View {
             TextField("Enter current value", text: $currentValueString)
                 .keyboardType(.decimalPad)
                 .onChange(of: currentValueString) { commitCurrentValue() }
-                .textFieldStyle(.roundedBorder)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(asset.type.textFieldBackgroundColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                )
 
             TextField("Monthly Contribution", text: $monthlyContributionString)
                 .keyboardType(.decimalPad)
                 .onChange(of: monthlyContributionString) { commitMonthlyContribution() }
-                .textFieldStyle(.roundedBorder)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(asset.type.textFieldBackgroundColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                )
 
             TextField("Annual growth rate (%)", text: $growthRateString)
                 .keyboardType(.decimalPad)
                 .onChange(of: growthRateString) { commitGrowthRate() }
-                .textFieldStyle(.roundedBorder)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(asset.type.textFieldBackgroundColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                )
 
             HStack(spacing: 10) {
                 TextField("Annual yield (%) (optional)", text: $yieldRateString)
                     .keyboardType(.decimalPad)
                     .onChange(of: yieldRateString) { commitYieldRate() }
-                    .textFieldStyle(.roundedBorder)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(asset.type.textFieldBackgroundColor)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                    )
 
                 TextField("Inflation (%) (optional)", text: $inflationString)
                     .keyboardType(.decimalPad)
                     .onChange(of: inflationString) { commitInflation() }
-                    .textFieldStyle(.roundedBorder)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(asset.type.textFieldBackgroundColor)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                    )
             }
 
             TextField("Investment months", text: $investMonthsString)
                 .keyboardType(.numberPad)
                 .onChange(of: investMonthsString) { commitInvestMonths() }
-                .textFieldStyle(.roundedBorder)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(asset.type.textFieldBackgroundColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+                )
         }
         .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.secondary, lineWidth: 1)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(asset.type.cardBackgroundColor)
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.secondary, lineWidth: 1)
+            }
         )
         .contentShape(Rectangle())
         .onTapGesture { hideKeyboard() }
