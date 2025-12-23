@@ -73,13 +73,15 @@ struct ContentView: View {
 
             Spacer()
 
-            // Right: Heart (Saved)
-            Button(action: { self.showSavePrompt = true }) {
-                Image(systemName: "heart")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Color.black.opacity(0.06))
-                    .clipShape(Circle())
+            // Right: Heart (Saved) only if calculatedTotal != nil
+            if calculatedTotal != nil {
+                Button(action: { self.showSavePrompt = true }) {
+                    Image(systemName: store.containsPortfolio(with: assets) ? "heart.fill" : "heart")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.06))
+                        .clipShape(Circle())
+                }
             }
         }
         .padding(.horizontal)
