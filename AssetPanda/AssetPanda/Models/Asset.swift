@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum AssetType: String, CaseIterable, Identifiable, Codable {
     case realEstate
@@ -16,6 +17,16 @@ enum AssetType: String, CaseIterable, Identifiable, Codable {
         case .cash: return "Cash"
         case .crypto: return "Crypto"
         case .other: return "Other"
+        }
+    }
+    
+    var cardBackgroundColor: Color {
+        switch self {
+        case .realEstate: return Color.gray.opacity(0.1)
+        case .stocks: return Color.blue.opacity(0.08)
+        case .cash: return Color.green.opacity(0.08)
+        case .crypto: return Color.orange.opacity(0.09)
+        case .other: return Color.purple.opacity(0.09)
         }
     }
 }
@@ -44,6 +55,7 @@ struct Asset: Identifiable, Codable, Equatable {
     var yieldRate: Double         // annual %, e.g. 1.5
     var investMonths: Int         // total months
     var inflation: Double?        // optional annual inflation %
+    var monthlyContribution: Double // dollars
 
     init(
         id: UUID = UUID(),
@@ -53,7 +65,8 @@ struct Asset: Identifiable, Codable, Equatable {
         growthRate: Double = 0,
         yieldRate: Double = 0,
         investMonths: Int = 0,
-        inflation: Double? = nil
+        inflation: Double? = nil,
+        monthlyContribution: Double = 0
     ) {
         self.id = id
         self.type = type
@@ -63,6 +76,7 @@ struct Asset: Identifiable, Codable, Equatable {
         self.yieldRate = yieldRate
         self.investMonths = max(0, investMonths)
         self.inflation = inflation
+        self.monthlyContribution = max(0, monthlyContribution)
     }
 }
 

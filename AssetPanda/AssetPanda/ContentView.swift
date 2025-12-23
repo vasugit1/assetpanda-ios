@@ -7,21 +7,31 @@
 
 import SwiftUI
 import Foundation
-//import AssetCardView
-//import NetWorthCalculator
-//import Asset
 
 struct ContentView: View {
     @StateObject private var store = PortfolioStore()
+
     @State private var showSavedPortfolios = false
+    @State private var showSavedView = false
+    @State private var showSettingsView = false
+    @State private var showAboutView = false
+
     @State private var assets: [Asset] = [Asset()]
     @State private var calculatedTotal: Double? = nil
     @State private var savedMessage: String? = nil
-    
-    @State private var selectedPortfolioId: UUID? = nil
-    @State private var portfolioToDelete: SavedPortfolio? = nil
-    @State private var showingDeleteAlert = false
-    
+
+    @State private var showSavePrompt = false
+    @State private var savePortfolioName: String = ""
+
+    @State private var scrollProxy: ScrollViewProxy? = nil
+
+    // ✅ Minimize/expand: track collapsed cards by ID
+    @State private var collapsedAssetIDs: Set<UUID> = []
+
+    // ✅ Future value details sheet
+    @State private var showFutureValueDetails: Bool = false
+    @State private var breakdownRows: [FutureValueBreakdownRow] = []
+
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -29,281 +39,487 @@ struct ContentView: View {
         formatter.locale = Locale.current
         return formatter
     }
-    
-    private var portfolioPicker: some View {
-        if !self.store.portfolios.isEmpty {
-            return AnyView(
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(Array(self.store.portfolios.enumerated()), id: \.element.id) { index, portfolio in
-                            portfolioPickerRow(index: index, portfolio: portfolio)
+
+    // MARK: - Compact Header (Custom "Nav Bar")
+    private var compactHeader: some View {
+        HStack(spacing: 12) {
+
+            Menu {
+                Button { self.showSavedView = true } label: {
+                    Label("Saved Portfolios", systemImage: "heart.fill")
+                }
+
+                Button { self.showSettingsView = true } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+
+                Button { self.showAboutView = true } label: {
+                    Label("About Us", systemImage: "info.circle")
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(Color.black.opacity(0.06))
+                    .clipShape(Circle())
+            }
+
+            Spacer()
+
+            Text("AssetPanda")
+                .font(.system(size: 22, weight: .semibold))
+                .lineLimit(1)
+
+            Spacer()
+
+            if calculatedTotal != nil {
+                Button(action: { self.showSavePrompt = true }) {
+                    Image(systemName: store.containsPortfolio(with: assets) ? "heart.fill" : "heart")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.06))
+                        .clipShape(Circle())
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Asset List (Scroll Content)
+    private var assetList: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+
+                    Text("Your Assets")
+                        .font(.title2.bold())
+                        .padding(.horizontal)
+
+                    ForEach(self.assets) { asset in
+                        if let idx = self.assets.firstIndex(where: { $0.id == asset.id }) {
+
+                            let assetId = self.assets[idx].id
+                            let isCollapsed = collapsedAssetIDs.contains(assetId)
+
+                            AssetCardView(
+                                asset: self.$assets[idx],
+                                isCollapsed: isCollapsed,
+                                onHeaderTap: {
+                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                                        if collapsedAssetIDs.contains(assetId) {
+                                            collapsedAssetIDs.remove(assetId)
+                                        } else {
+                                            collapsedAssetIDs.insert(assetId)
+                                        }
+                                    }
+                                },
+                                onRemove: self.assets.count > 1 ? {
+                                    if let removeIndex = self.assets.firstIndex(where: { $0.id == assetId }) {
+                                        self.assets.remove(at: removeIndex)
+                                    }
+                                    collapsedAssetIDs.remove(assetId)
+                                } : nil
+                            )
+                            .id(assetId)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 6)
                 }
-            )
-        } else {
-            return AnyView(EmptyView())
+                .padding(.top, 6)
+                .padding(.bottom, 12)
+            }
+            .onAppear { self.scrollProxy = proxy }
+            .onChange(of: assets.count) { _, _ in
+                if let last = assets.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
         }
     }
-    
-    private func portfolioPickerRow(index: Int, portfolio: SavedPortfolio) -> some View {
-        HStack(spacing: 6) {
+
+    // MARK: - Actions
+    private var actionButtons: some View {
+        HStack(spacing: 16) {
+
             Button(action: {
-                self.assets = portfolio.assets
-                self.calculatedTotal = nil
-                self.savedMessage = nil
+                let newAsset = Asset()
+                assets.append(newAsset)
+                if let proxy = scrollProxy {
+                    withAnimation { proxy.scrollTo(newAsset.id, anchor: .bottom) }
+                }
             }) {
                 HStack(spacing: 6) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Portfolio \(index + 1)")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                        Text(portfolio.savedDate.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                        if !portfolio.assets.isEmpty {
-                            Text("\(portfolio.assets.count) asset\(portfolio.assets.count == 1 ? "" : "s")")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .frame(minWidth: 70, alignment: .leading)
+                    Image(systemName: "plus")
+                    Text("Add")
                 }
-                .padding(.vertical, 6)
-                .padding(.leading, 12)
-                .padding(.trailing, 8)
-                .background(Color.gray.opacity(0.2))
-                .clipShape(Capsule())
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color(.systemGray5))
+                .foregroundStyle(.primary)
+                .cornerRadius(12)
             }
+
             Button(action: {
-                self.store.deletePortfolio(portfolio)
+                self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
             }) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
+                Text("Calculate")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
+            }
+
+            Button(action: {
+                self.assets = [Asset()]
+                self.calculatedTotal = nil
+                self.savedMessage = nil
+                self.collapsedAssetIDs.removeAll()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise")
+                    Text("Reset")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color(.systemGray5))
+                .foregroundStyle(.primary)
+                .cornerRadius(12)
             }
         }
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
-    
-    private var assetList: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                ForEach(self.assets.indices, id: \.self) { idx in
-                    AssetCardView(asset: self.$assets[idx], onRemove: self.assets.count > 1 ? { self.assets.remove(at: idx) } : nil)
-                }
-            }
-        }
-    }
-    
-    private var actionButtons: some View {
-        Group {
-            if self.calculatedTotal == nil {
-                Button(action: {
-                    self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
-                }) {
-                    Text("Calculate")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.top)
-            } else {
-                VStack(spacing: 8) {
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: self.assets)
-                        }) {
-                            Text("Calculate")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, maxHeight: 44)
-                                .background(Color.accentColor)
-                                .foregroundStyle(.white)
-                                .cornerRadius(12)
-                        }
-                        
-                        Button(action: {
-                            self.saveCurrentPortfolio()
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "heart.fill")
-                                Text("Save")
-                            }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, maxHeight: 44)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
-                        }
-                        
-                        Button(action: {
-                            self.assets = [Asset()]
-                            self.calculatedTotal = nil
-                            self.savedMessage = nil
-                        }) {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, maxHeight: 44)
-                                .background(Color.accentColor)
-                                .foregroundStyle(.white)
-                                .cornerRadius(12)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-                    
-                    if let total = self.calculatedTotal, let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
-                        Text("Future Value: \(formatted)")
-                            .font(.title2.bold())
-                            .foregroundStyle(.secondary)
-                            .padding(.top)
-                    }
-                    
-                    if let msg = self.savedMessage {
-                        Text(msg)
-                            .foregroundColor(.green)
-                            .padding(.top, 4)
-                    }
-                }
-            }
-        }
-    }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                
-                // Inserted Saved Portfolios chip row above "Your Assets"
-                if !store.portfolios.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Saved Portfolios")
-                            .font(.caption).bold()
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(store.portfolios.enumerated()), id: \.element.id) { index, portfolio in
-                                    let isSelected = selectedPortfolioId == portfolio.id
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                            .fill(Color(.systemBackground).opacity(isSelected ? 1.0 : 0.8))
-                                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-                                            )
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("Portfolio \(index + 1)")
-                                                .font(.callout.weight(.semibold))
-                                                .lineLimit(1)
-                                            Text(portfolio.savedDate.formatted(date: .abbreviated, time: .omitted))
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                                .lineLimit(1)
-                                            if !portfolio.assets.isEmpty {
-                                                Text("\(portfolio.assets.count) asset\(portfolio.assets.count == 1 ? "" : "s")")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                        .padding(.vertical, 7)
-                                        .padding(.horizontal, 12)
-                                    }
-                                    .frame(minWidth: 95, maxWidth: 130, minHeight: 44)
-                                    .scaleEffect(isSelected ? 1.08 : 1.0)
-                                    .onTapGesture {
-                                        selectedPortfolioId = portfolio.id
-                                        assets = portfolio.assets
-                                        calculatedTotal = nil
-                                        savedMessage = nil
-                                    }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            portfolioToDelete = portfolio
-                                            showingDeleteAlert = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .frame(maxHeight: 60)
-                        }
-                    }
-                    .padding(.top, 6)
-                }
-                
-                HStack {
-                    Text("Your Assets")
-                        .font(.title2.bold())
-                    Spacer()
-                }
-                .padding(.horizontal)
-                
+
+                compactHeader
                 assetList
-                
                 actionButtons
-                
+
+                // ✅ Centered + clickable Future Value
+                if let total = self.calculatedTotal,
+                   let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
+
+                    Button {
+                        // ✅ Add asset type to the breakdown label
+                        breakdownRows = assets.enumerated().map { (idx, a) in
+                            let typeName = a.type.displayName
+                            return FutureValueBreakdownRow(
+                                label: "Asset \(idx + 1) (\(typeName))",
+                                value: NetWorthCalculator.futureValue(for: a)
+                            )
+                        }
+                        showFutureValueDetails = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Future Value: \(formatted)")
+                                .font(.title2.bold())
+                                .foregroundStyle(.secondary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.secondary.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .sheet(isPresented: $showFutureValueDetails) {
+                        FutureValueDetailsView(
+                            assets: assets,
+                            breakdown: breakdownRows,
+                            total: total
+                        )
+                        .presentationDetents([.medium, .large])
+                    }
+                }
+
+                if let msg = self.savedMessage {
+                    Text(msg)
+                        .foregroundColor(.green)
+                        .font(.footnote)
+                        .padding(.top, 4)
+                        .transition(.opacity)
+                        .animation(.easeInOut, value: savedMessage)
+                        .padding(.horizontal)
+                }
+
                 Spacer(minLength: 16)
             }
-            //.padding(.top)
-            .onAppear {
-                self.store.load()
-                if selectedPortfolioId == nil, !store.portfolios.isEmpty {
-                    selectedPortfolioId = store.portfolios.last?.id
-                }
+            .onAppear { self.store.load() }
+            .navigationBarHidden(true)
+
+            .navigationDestination(isPresented: $showSavedView) {
+                SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
+                    self.assets = portfolio.assets
+                    self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: portfolio.assets)
+                    self.savedMessage = nil
+                    self.showSavedView = false
+                    self.collapsedAssetIDs.removeAll()
+                })
             }
-            //.navigationTitle("AssetPanda")
-            //.navigationBarTitleDisplayMode(.inline)
+
+            .navigationDestination(isPresented: $showSettingsView) {
+                SettingsView()
+            }
+
+            .navigationDestination(isPresented: $showAboutView) {
+                AboutUsView()
+            }
+
+            .sheet(isPresented: $showSavePrompt, onDismiss: {
+                showSavePrompt = false
+                savePortfolioName = ""
+            }) {
+                SavePortfolioPrompt(
+                    portfolioCount: store.portfolios.count,
+                    portfolioName: $savePortfolioName,
+                    existingNames: store.portfolios.map { $0.name },
+                    onCancel: { showSavePrompt = false },
+                    onSave: {
+                        let trimmed = savePortfolioName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let nameToUse = trimmed.isEmpty ? "Portfolio \(store.portfolios.count + 1)" : trimmed
+
+                        if store.containsPortfolio(with: assets) {
+                            savedMessage = "Already saved!"
+                        } else {
+                            let portfolio = SavedPortfolio(name: nameToUse, assets: assets, savedDate: Date())
+                            store.save(portfolio: portfolio)
+                            savedMessage = "Saved!"
+                        }
+
+                        showSavePrompt = false
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation { savedMessage = nil }
+                        }
+                    }
+                )
+                .presentationDetents([.medium])
+            }
+        }
+        .alert("Delete Portfolio?", isPresented: $showSavedPortfolios) {
+            Button("OK") {}
+        }
+    }
+}
+
+// MARK: - Save Portfolio Prompt
+struct SavePortfolioPrompt: View {
+    let portfolioCount: Int
+    @Binding var portfolioName: String
+    let existingNames: [String]
+    var onCancel: () -> Void
+    var onSave: () -> Void
+
+    @FocusState private var nameFieldFocused: Bool
+    @State private var isDuplicateName: Bool = false
+
+    var normalizedName: String { portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    var nameIsDuplicate: Bool {
+        existingNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .contains(normalizedName)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Save Portfolio")
+                    .font(.title2.bold())
+                    .padding(.top)
+
+                TextField("Enter name (e.g., 2025 Plan & Beyond)", text: $portfolioName)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                    .autocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .focused($nameFieldFocused)
+
+                if isDuplicateName {
+                    Text("A portfolio with this name already exists.")
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                }
+
+                Text("Give this portfolio a name so you can easily find it later.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+
+                Spacer()
+            }
+            .onAppear { self.nameFieldFocused = true }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: { print("Menu tapped") }) {
-                        Image(systemName: "line.3.horizontal")
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
                 }
-                ToolbarItem(placement: .principal) {
-                    Text("AssetPanda")
-                        .font(.system(size: 22, weight: .semibold))
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button(action: { self.showSavedPortfolios = true }) {
-                        Image(systemName: "heart")
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if nameIsDuplicate {
+                            isDuplicateName = true
+                            return
+                        }
+                        isDuplicateName = false
+                        onSave()
                     }
-                    Button(action: { self.assets.append(Asset()) }) {
-                        Image(systemName: "plus")
-                    }
+                    .disabled(portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || nameIsDuplicate)
                 }
             }
         }
-        .alert("Delete Portfolio?", isPresented: $showingDeleteAlert, presenting: portfolioToDelete) { portfolio in
-            Button("Delete", role: .destructive) {
-                store.deletePortfolio(portfolio)
-                if selectedPortfolioId == portfolio.id {
-                    selectedPortfolioId = nil
+    }
+}
+
+// MARK: - Future Value Details Models (local)
+struct FutureValueBreakdownRow: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: Double
+}
+
+// MARK: - Future Value Details Sheet
+struct FutureValueDetailsView: View {
+    let assets: [Asset]
+    let breakdown: [FutureValueBreakdownRow]
+    let total: Double
+
+    private let monthColWidth: CGFloat = 56 // ✅ narrower month column
+
+    private var currencyFormatter: NumberFormatter {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.usesGroupingSeparator = true
+        f.locale = Locale.current
+        return f
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+
+                    // ===== Future Estimate Breakdown =====
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader("Future Estimate Breakdown")
+
+                        VStack(spacing: 10) {
+                            ForEach(breakdown) { row in
+                                HStack {
+                                    Text(row.label + " :")
+                                        .font(.body.weight(.semibold))
+                                    Spacer()
+                                    Text(currencyFormatter.string(from: NSNumber(value: row.value)) ?? "\(row.value)")
+                                        .font(.body.monospacedDigit())
+                                }
+                            }
+
+                            Divider().padding(.vertical, 4)
+
+                            HStack {
+                                Text("Future Value :")
+                                    .font(.headline)
+                                Spacer()
+                                Text(currencyFormatter.string(from: NSNumber(value: total)) ?? "\(total)")
+                                    .font(.headline.monospacedDigit())
+                            }
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black.opacity(0.04))
+                        )
+                    }
+
+                    // ===== Combined Amortization (ALL assets) =====
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader("Amortization")
+
+                        let rows = NetWorthCalculator.portfolioAmortizationSchedule(for: assets)
+
+                        amortizationTable(rows: rows)
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.black.opacity(0.04))
+                            )
+                    }
                 }
+                .padding()
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This will permanently remove the saved portfolio.")
+            .navigationTitle("Future Value Details")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
-    
-    private func saveCurrentPortfolio() {
-        if store.containsPortfolio(with: assets) {
-            savedMessage = "Already saved!"
-            return
-        }
-        let portfolio = SavedPortfolio(assets: assets)
-        store.save(portfolio: portfolio)
-        savedMessage = "Saved!"
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline.weight(.bold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
+
+    // ✅ Month column narrower + other columns moved left (not full width)
+    private func amortizationTable(rows: [AmortizationRow]) -> some View {
+        VStack(spacing: 8) {
+
+            // Header Row
+            HStack(spacing: 6) {   // ⬅️ reduced spacing
+                Text("Month")
+                    .frame(width: 44, alignment: .center)   // ⬅️ narrower + centered
+
+                Text("Principal")
+                    .frame(width: 95, alignment: .trailing)
+
+                Text("Interest")
+                    .frame(width: 85, alignment: .trailing)
+
+                Text("Total")
+                    .frame(width: 110, alignment: .trailing)
+
+                Spacer(minLength: 0)
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+
+            Divider()
+
+            // Data Rows
+            ForEach(rows) { r in
+                HStack(spacing: 6) {   // ⬅️ reduced spacing
+                    Text("\(r.month)")
+                        .frame(width: 44, alignment: .center) // ⬅️ centered month value
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.contribution)) ?? "\(r.contribution)")
+                        .frame(width: 95, alignment: .trailing)
+                        .monospacedDigit()
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.interest)) ?? "\(r.interest)")
+                        .frame(width: 85, alignment: .trailing)
+                        .monospacedDigit()
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.endingTotal)) ?? "\(r.endingTotal)")
+                        .frame(width: 110, alignment: .trailing)
+                        .monospacedDigit()
+
+                    Spacer(minLength: 0)
+                }
+                .font(.subheadline)
+            }
+        }
+    }
+
 }
 
 #Preview {
