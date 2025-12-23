@@ -2,6 +2,26 @@ import SwiftUI
 import Foundation
 
 private extension AssetType {
+    var fieldBaseColor: Color {
+        switch self {
+        case .realEstate: return Color.gray.opacity(0.13)
+        case .stocks: return Color.blue.opacity(0.13)
+        case .cash: return Color.green.opacity(0.13)
+        case .crypto: return Color.orange.opacity(0.16)
+        case .other: return Color.purple.opacity(0.16)
+        }
+    }
+    var fieldFocusedColor: Color {
+        fieldBaseColor.opacity(0.87)
+    }
+    var fieldUnfocusedColor: Color {
+        fieldBaseColor
+    }
+    var fieldFocusedBorder: Color { Color.accentColor.opacity(0.28) }
+    var fieldUnfocusedBorder: Color { Color.secondary.opacity(0.14) }
+}
+
+private extension AssetType {
     var textFieldBackgroundColor: Color {
         switch self {
         case .realEstate: return Color.gray.opacity(0.11)
@@ -22,6 +42,37 @@ extension View {
     }
 }
 
+enum FocusableField: Hashable {
+    case currentValue, monthlyContribution, growthRate, yieldRate, investMonths, inflation
+}
+
+struct CardTextFieldStyle: ViewModifier {
+    let assetType: AssetType
+    let isFocused: Bool
+    func body(content: Content) -> some View {
+        content
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isFocused ? assetType.fieldFocusedColor : assetType.fieldUnfocusedColor)
+                    .animation(.easeInOut(duration: 0.25), value: isFocused)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isFocused ? assetType.fieldFocusedBorder : assetType.fieldUnfocusedBorder, lineWidth: 1)
+                    .animation(.easeInOut(duration: 0.25), value: isFocused)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.black.opacity(isFocused ? 0.06 : 0.03), lineWidth: 2)
+                    .blur(radius: 1.2)
+                    .offset(y: 1)
+                    .mask(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(LinearGradient(colors: [Color.black, Color.clear], startPoint: .top, endPoint: .bottom)))
+            )
+    }
+}
+
 struct AssetCardView: View {
     @Binding var asset: Asset
 
@@ -31,6 +82,8 @@ struct AssetCardView: View {
     @State private var yieldRateString: String = ""
     @State private var investMonthsString: String = ""
     @State private var inflationString: String = ""
+
+    @FocusState private var focusedField: FocusableField?
 
     var onRemove: (() -> Void)? = nil
 
@@ -153,76 +206,46 @@ struct AssetCardView: View {
             TextField("Enter current value", text: $currentValueString)
                 .keyboardType(.decimalPad)
                 .onChange(of: currentValueString) { commitCurrentValue() }
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(asset.type.textFieldBackgroundColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                )
+                .focused($focusedField, equals: .currentValue)
+                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .currentValue))
+                .animation(.easeInOut(duration: 0.25), value: asset.type)
 
             TextField("Monthly Contribution", text: $monthlyContributionString)
                 .keyboardType(.decimalPad)
                 .onChange(of: monthlyContributionString) { commitMonthlyContribution() }
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(asset.type.textFieldBackgroundColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                )
+                .focused($focusedField, equals: .monthlyContribution)
+                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
+                .animation(.easeInOut(duration: 0.25), value: asset.type)
 
             TextField("Annual growth rate (%)", text: $growthRateString)
                 .keyboardType(.decimalPad)
                 .onChange(of: growthRateString) { commitGrowthRate() }
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(asset.type.textFieldBackgroundColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                )
+                .focused($focusedField, equals: .growthRate)
+                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
+                .animation(.easeInOut(duration: 0.25), value: asset.type)
 
             HStack(spacing: 10) {
                 TextField("Annual yield (%) (optional)", text: $yieldRateString)
                     .keyboardType(.decimalPad)
                     .onChange(of: yieldRateString) { commitYieldRate() }
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(asset.type.textFieldBackgroundColor)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                    )
+                    .focused($focusedField, equals: .yieldRate)
+                    .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
+                    .animation(.easeInOut(duration: 0.25), value: asset.type)
 
                 TextField("Inflation (%) (optional)", text: $inflationString)
                     .keyboardType(.decimalPad)
                     .onChange(of: inflationString) { commitInflation() }
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(asset.type.textFieldBackgroundColor)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                    )
+                    .focused($focusedField, equals: .inflation)
+                    .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
+                    .animation(.easeInOut(duration: 0.25), value: asset.type)
             }
 
             TextField("Investment months", text: $investMonthsString)
                 .keyboardType(.numberPad)
                 .onChange(of: investMonthsString) { commitInvestMonths() }
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(asset.type.textFieldBackgroundColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                )
+                .focused($focusedField, equals: .investMonths)
+                .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .investMonths))
+                .animation(.easeInOut(duration: 0.25), value: asset.type)
         }
         .padding(18)
         .background(
@@ -232,6 +255,7 @@ struct AssetCardView: View {
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(Color.secondary, lineWidth: 1)
             }
+            .animation(.easeInOut(duration: 0.25), value: asset.type)
         )
         .contentShape(Rectangle())
         .onTapGesture { hideKeyboard() }
