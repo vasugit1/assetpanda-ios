@@ -25,8 +25,12 @@ struct ContentView: View {
 
     @State private var scrollProxy: ScrollViewProxy? = nil
 
-    // NEW: Track collapsed cards by Asset ID
+    // ✅ Restore minimize/expand: track collapsed cards by ID
     @State private var collapsedAssetIDs: Set<UUID> = []
+
+    // ✅ Future value details sheet
+    @State private var showFutureValueDetails: Bool = false
+    @State private var breakdownRows: [FutureValueBreakdownRow] = []
 
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
@@ -42,21 +46,15 @@ struct ContentView: View {
 
             // Left: Hamburger Menu
             Menu {
-                Button {
-                    self.showSavedView = true
-                } label: {
+                Button { self.showSavedView = true } label: {
                     Label("Saved Portfolios", systemImage: "heart.fill")
                 }
 
-                Button {
-                    self.showSettingsView = true
-                } label: {
+                Button { self.showSettingsView = true } label: {
                     Label("Settings", systemImage: "gear")
                 }
 
-                Button {
-                    self.showAboutView = true
-                } label: {
+                Button { self.showAboutView = true } label: {
                     Label("About Us", systemImage: "info.circle")
                 }
             } label: {
@@ -105,28 +103,30 @@ struct ContentView: View {
                     ForEach(self.assets) { asset in
                         if let idx = self.assets.firstIndex(where: { $0.id == asset.id }) {
 
-                            let isCollapsed = collapsedAssetIDs.contains(asset.id)
+                            let assetId = self.assets[idx].id
+                            let isCollapsed = collapsedAssetIDs.contains(assetId)
 
                             AssetCardView(
                                 asset: self.$assets[idx],
                                 isCollapsed: isCollapsed,
                                 onHeaderTap: {
-                                    // Dismiss keyboard if any field was active; then toggle collapse
                                     withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-                                        if isCollapsed {
-                                            collapsedAssetIDs.remove(asset.id)
+                                        if collapsedAssetIDs.contains(assetId) {
+                                            collapsedAssetIDs.remove(assetId)
                                         } else {
-                                            collapsedAssetIDs.insert(asset.id)
+                                            collapsedAssetIDs.insert(assetId)
                                         }
                                     }
                                 },
                                 onRemove: self.assets.count > 1 ? {
-                                    // Remove the collapse state for this asset as well
-                                    collapsedAssetIDs.remove(asset.id)
-                                    self.assets.remove(at: idx)
+                                    // Remove by id (safer than capturing idx)
+                                    if let removeIndex = self.assets.firstIndex(where: { $0.id == assetId }) {
+                                        self.assets.remove(at: removeIndex)
+                                    }
+                                    collapsedAssetIDs.remove(assetId)
                                 } : nil
                             )
-                            .id(asset.id)
+                            .id(assetId)
                         }
                     }
                 }
@@ -137,7 +137,6 @@ struct ContentView: View {
                 self.scrollProxy = proxy
             }
             .onChange(of: assets.count) { _, _ in
-                // Scroll to last asset if added
                 if let last = assets.last {
                     withAnimation {
                         proxy.scrollTo(last.id, anchor: .bottom)
@@ -150,12 +149,10 @@ struct ContentView: View {
     // MARK: - Actions
     private var actionButtons: some View {
         HStack(spacing: 16) {
+
             Button(action: {
                 let newAsset = Asset()
                 assets.append(newAsset)
-
-                // By default, new card starts expanded (do nothing to collapsedAssetIDs)
-
                 if let proxy = scrollProxy {
                     withAnimation {
                         proxy.scrollTo(newAsset.id, anchor: .bottom)
@@ -187,11 +184,10 @@ struct ContentView: View {
             }
 
             Button(action: {
-                // Reset to default: exactly one card
                 self.assets = [Asset()]
-                self.collapsedAssetIDs.removeAll()
                 self.calculatedTotal = nil
                 self.savedMessage = nil
+                self.collapsedAssetIDs.removeAll()
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.counterclockwise")
@@ -217,13 +213,38 @@ struct ContentView: View {
                 assetList
                 actionButtons
 
+                // ✅ Centered + clickable Future Value
                 if let total = self.calculatedTotal,
                    let formatted = self.currencyFormatter.string(from: NSNumber(value: total)) {
-                    Text("Future Value: \(formatted)")
-                        .font(.title2.bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 6)
-                        .padding(.horizontal)
+
+                    Button {
+                        breakdownRows = assets.enumerated().map { (idx, a) in
+                            FutureValueBreakdownRow(label: "Asset \(idx + 1)", value: NetWorthCalculator.futureValue(for: a))
+                        }
+                        showFutureValueDetails = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Future Value: \(formatted)")
+                                .font(.title2.bold())
+                                .foregroundStyle(.secondary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.secondary.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .sheet(isPresented: $showFutureValueDetails) {
+                        FutureValueDetailsView(
+                            assets: assets,
+                            breakdown: breakdownRows,
+                            total: total
+                        )
+                        .presentationDetents([.medium, .large])
+                    }
                 }
 
                 if let msg = self.savedMessage {
@@ -238,19 +259,19 @@ struct ContentView: View {
 
                 Spacer(minLength: 16)
             }
-            .onAppear {
-                self.store.load()
-            }
-            .navigationBarHidden(true) // Hide the system navigation bar
+            .onAppear { self.store.load() }
+            .navigationBarHidden(true)
 
             // Saved Portfolios
             .navigationDestination(isPresented: $showSavedView) {
                 SavedPortfoliosView(store: store, onPortfolioSelected: { portfolio in
                     self.assets = portfolio.assets
-                    self.collapsedAssetIDs.removeAll()
                     self.calculatedTotal = NetWorthCalculator.calculateFutureValue(for: portfolio.assets)
                     self.savedMessage = nil
                     self.showSavedView = false
+
+                    // optional: expand all on load
+                    self.collapsedAssetIDs.removeAll()
                 })
             }
 
@@ -264,6 +285,7 @@ struct ContentView: View {
                 AboutUsView()
             }
 
+            // Save prompt sheet
             .sheet(isPresented: $showSavePrompt, onDismiss: {
                 showSavePrompt = false
                 savePortfolioName = ""
@@ -272,11 +294,8 @@ struct ContentView: View {
                     portfolioCount: store.portfolios.count,
                     portfolioName: $savePortfolioName,
                     existingNames: store.portfolios.map { $0.name },
-                    onCancel: {
-                        showSavePrompt = false
-                    },
+                    onCancel: { showSavePrompt = false },
                     onSave: {
-                        // This closure is now called only if name is not duplicate (see SavePortfolioPrompt)
                         let trimmed = savePortfolioName.trimmingCharacters(in: .whitespacesAndNewlines)
                         let nameToUse = trimmed.isEmpty ? "Portfolio \(store.portfolios.count + 1)" : trimmed
 
@@ -291,9 +310,7 @@ struct ContentView: View {
                         showSavePrompt = false
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation {
-                                savedMessage = nil
-                            }
+                            withAnimation { savedMessage = nil }
                         }
                     }
                 )
@@ -318,7 +335,10 @@ struct SavePortfolioPrompt: View {
     @State private var isDuplicateName: Bool = false
 
     var normalizedName: String { portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-    var nameIsDuplicate: Bool { existingNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.contains(normalizedName) }
+    var nameIsDuplicate: Bool {
+        existingNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .contains(normalizedName)
+    }
 
     var body: some View {
         NavigationStack {
@@ -350,9 +370,7 @@ struct SavePortfolioPrompt: View {
 
                 Spacer()
             }
-            .onAppear {
-                self.nameFieldFocused = true
-            }
+            .onAppear { self.nameFieldFocused = true }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onCancel() }
@@ -368,6 +386,133 @@ struct SavePortfolioPrompt: View {
                     }
                     .disabled(portfolioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || nameIsDuplicate)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Future Value Details Models (local)
+struct FutureValueBreakdownRow: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: Double
+}
+
+// MARK: - Future Value Details Sheet
+struct FutureValueDetailsView: View {
+    let assets: [Asset]
+    let breakdown: [FutureValueBreakdownRow]
+    let total: Double
+
+    private var currencyFormatter: NumberFormatter {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.usesGroupingSeparator = true
+        f.locale = Locale.current
+        return f
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+
+                    // ===== Future Estimate Breakdown =====
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader("Future Estimate Breakdown")
+
+                        VStack(spacing: 10) {
+                            ForEach(breakdown) { row in
+                                HStack {
+                                    Text(row.label + " :")
+                                        .font(.body.weight(.semibold))
+                                    Spacer()
+                                    Text(currencyFormatter.string(from: NSNumber(value: row.value)) ?? "\(row.value)")
+                                        .font(.body.monospacedDigit())
+                                }
+                            }
+
+                            Divider().padding(.vertical, 4)
+
+                            HStack {
+                                Text("Future Value :")
+                                    .font(.headline)
+                                Spacer()
+                                Text(currencyFormatter.string(from: NSNumber(value: total)) ?? "\(total)")
+                                    .font(.headline.monospacedDigit())
+                            }
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black.opacity(0.04))
+                        )
+                    }
+
+                    // ===== Combined Amortization (ALL assets) =====
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader("Amortization")
+
+                        let rows = NetWorthCalculator.portfolioAmortizationSchedule(for: assets)
+
+                        amortizationTable(rows: rows)
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.black.opacity(0.04))
+                            )
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Future Value Details")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline.weight(.bold)) // ✅ bigger
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func amortizationTable(rows: [AmortizationRow]) -> some View {
+        VStack(spacing: 10) {
+
+            // Header Row (bigger)
+            HStack {
+                Text("Month").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Principal").frame(maxWidth: .infinity, alignment: .trailing)
+                Text("Interest").frame(maxWidth: .infinity, alignment: .trailing)
+                Text("Total").frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .font(.subheadline.weight(.semibold)) // ✅ bigger than caption
+            .foregroundStyle(.secondary)
+
+            Divider()
+
+            // Data Rows (bigger)
+            ForEach(rows) { r in
+                HStack {
+                    Text("\(r.month)")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.contribution)) ?? "\(r.contribution)")
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .monospacedDigit()
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.interest)) ?? "\(r.interest)")
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .monospacedDigit()
+
+                    Text(currencyFormatter.string(from: NSNumber(value: r.endingTotal)) ?? "\(r.endingTotal)")
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .monospacedDigit()
+                }
+                .font(.subheadline) // ✅ bigger
             }
         }
     }

@@ -1,8 +1,17 @@
 import Foundation
 
+// Put AmortizationRow in the model layer so both NetWorthCalculator + ContentView can use it.
+struct AmortizationRow: Identifiable {
+    let id = UUID()
+    let month: Int
+    let contribution: Double     // total principal added across assets that month
+    let interest: Double         // total interest earned across assets that month
+    let endingTotal: Double      // total portfolio value after that month
+}
+
 struct NetWorthCalculator {
 
-    /// Calculates the future (inflation-adjusted) value of a single asset.
+    /// Calculates the future value of a single asset using the provided formula.
     static func futureValue(for asset: Asset) -> Double {
 
         // Convert INR to USD using the conversion rate 1 USD = 83 INR if asset is located in India
@@ -14,35 +23,29 @@ struct NetWorthCalculator {
             principal = max(0, asset.currentValue)
         }
 
-        let months = max(0, asset.investMonths)
-        let n = Double(months)
+        let n = max(0, asset.investMonths)
 
-        // Nominal annual interest rate (growth + yield)
+        // If yieldRate is 0 or unset (treated as 0), use 0 in calculation
         let yieldRate = asset.yieldRate == 0 ? 0 : asset.yieldRate
-        let nominalAnnualRate = (asset.growthRate + yieldRate) / 100.0
 
-        let monthlyContribution = max(0, asset.monthlyContribution)
+        var effectiveRate = (asset.growthRate + yieldRate) / 100.0
 
-        // No interest case
-        if nominalAnnualRate == 0 {
-            let fv = principal + monthlyContribution * n
-            return applyInflationIfNeeded(fv, asset: asset)
+        // If inflation is provided, subtract it (real return)
+        if let inflation = asset.inflation {
+            effectiveRate -= inflation / 100.0
         }
 
-        // Monthly compounding
-        let monthlyRate = nominalAnnualRate / 12.0
-        let growthFactor = pow(1.0 + monthlyRate, n)
+        let r = effectiveRate
+        let M = asset.monthlyContribution
 
-        // Annuity Due (deposit at beginning of month)
-        let annuityDueFactor =
-            ((growthFactor - 1.0) / monthlyRate) * (1.0 + monthlyRate)
-
-        let nominalFV =
-            principal * growthFactor +
-            monthlyContribution * annuityDueFactor
-
-        // Apply inflation discount to final value (if provided)
-        return applyInflationIfNeeded(nominalFV, asset: asset)
+        if r == 0 {
+            return principal + M * Double(n)
+        } else {
+            let monthlyRate = r / 12.0
+            let fv = principal * pow(1.0 + monthlyRate, Double(n))
+                + M * ((pow(1.0 + monthlyRate, Double(n)) - 1) / monthlyRate)
+            return fv
+        }
     }
 
     /// Calculates the rounded total future value for an array of assets.
@@ -51,17 +54,73 @@ struct NetWorthCalculator {
         return (total * 100).rounded() / 100
     }
 
-    // MARK: - Inflation adjustment (internal only)
+    /// Combined portfolio amortization (one schedule for ALL assets merged).
+    /// Each asset grows + contributes only for its own investMonths; then it stops (consistent with your FV model).
+    static func portfolioAmortizationSchedule(for assets: [Asset]) -> [AmortizationRow] {
 
-    private static func applyInflationIfNeeded(_ value: Double, asset: Asset) -> Double {
-        guard let inflation = asset.inflation, inflation > 0 else {
-            return value
+        let maxMonths = assets.map { max(0, $0.investMonths) }.max() ?? 0
+        if maxMonths == 0 { return [] }
+
+        // Per-asset running balances
+        var balances: [UUID: Double] = [:]
+        balances.reserveCapacity(assets.count)
+
+        // Initialize principal per asset using same India->USD logic
+        for a in assets {
+            let principal: Double
+            if a.location == .india {
+                principal = max(0, a.currentValue / 83.0)
+            } else {
+                principal = max(0, a.currentValue)
+            }
+            balances[a.id] = principal
         }
 
-        let years = Double(asset.investMonths) / 12.0
-        let inflationRate = inflation / 100.0
+        var rows: [AmortizationRow] = []
+        rows.reserveCapacity(maxMonths)
 
-        // Real value after inflation
-        return value / pow(1.0 + inflationRate, years)
+        for month in 1...maxMonths {
+
+            var monthContributionTotal: Double = 0
+            var monthInterestTotal: Double = 0
+            var endingTotal: Double = 0
+
+            for a in assets {
+                let horizon = max(0, a.investMonths)
+                var balance = balances[a.id] ?? 0
+
+                if month <= horizon {
+                    let contribution = max(0, a.monthlyContribution)
+
+                    let yieldRate = a.yieldRate == 0 ? 0 : a.yieldRate
+                    var effectiveRate = (a.growthRate + yieldRate) / 100.0
+                    if let inflation = a.inflation {
+                        effectiveRate -= inflation / 100.0
+                    }
+
+                    let monthlyRate = effectiveRate / 12.0
+                    let interest = (monthlyRate == 0) ? 0 : (balance * monthlyRate)
+
+                    monthContributionTotal += contribution
+                    monthInterestTotal += interest
+
+                    balance = balance + interest + contribution
+                    balances[a.id] = balance
+                }
+
+                endingTotal += (balances[a.id] ?? 0)
+            }
+
+            rows.append(
+                AmortizationRow(
+                    month: month,
+                    contribution: monthContributionTotal,
+                    interest: monthInterestTotal,
+                    endingTotal: endingTotal
+                )
+            )
+        }
+
+        return rows
     }
 }
