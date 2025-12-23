@@ -86,63 +86,227 @@ struct AssetCardView: View {
     @FocusState private var focusedField: FocusableField?
 
     var onRemove: (() -> Void)? = nil
-
+    
+    private var numberFormatter: NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = Locale.current.groupingSeparator ?? ","
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        formatter.decimalSeparator = Locale.current.decimalSeparator ?? "."
+        return formatter
+    }
+    
+    private func parseDecimal(_ input: String) -> Double? {
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        let cleaned = input.replacingOccurrences(of: groupingSeparator, with: "")
+        return Double(cleaned)
+    }
+    
+    private func formatNumber(_ value: Double) -> String {
+        numberFormatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+    
+    private func updateCurrentValueString(_ newValue: String) {
+        let decimalSeparator = numberFormatter.decimalSeparator ?? "."
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        
+        // Remove grouping separators for parsing
+        let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
+        
+        if newValue != currentValueString {
+            currentValueString = newValue
+        }
+        
+        if let value = Double(cleanedInput) {
+            asset.currentValue = max(0, value)
+            // If ends with decimal separator or empty, do not format to allow in-progress typing
+            if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
+                let formatted = formatNumber(value)
+                if formatted != currentValueString && focusedField != .currentValue {
+                    currentValueString = formatted
+                }
+            }
+        } else if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.currentValue = 0
+        }
+    }
+    
+    private func updateMonthlyContributionString(_ newValue: String) {
+        let decimalSeparator = numberFormatter.decimalSeparator ?? "."
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        
+        let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
+        
+        if newValue != monthlyContributionString {
+            monthlyContributionString = newValue
+        }
+        
+        if let value = Double(cleanedInput) {
+            asset.monthlyContribution = max(0, value)
+            if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
+                let formatted = formatNumber(value)
+                if formatted != monthlyContributionString && focusedField != .monthlyContribution {
+                    monthlyContributionString = formatted
+                }
+            }
+        } else if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.monthlyContribution = 0
+        }
+    }
+    
+    private func updateGrowthRateString(_ newValue: String) {
+        let decimalSeparator = numberFormatter.decimalSeparator ?? "."
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        
+        let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
+        
+        if newValue != growthRateString {
+            growthRateString = newValue
+        }
+        
+        if let value = Double(cleanedInput) {
+            asset.growthRate = value
+            if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
+                let formatted = formatNumber(value)
+                if formatted != growthRateString && focusedField != .growthRate {
+                    growthRateString = formatted
+                }
+            }
+        } else if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.growthRate = 0
+        }
+    }
+    
+    private func updateYieldRateString(_ newValue: String) {
+        let decimalSeparator = numberFormatter.decimalSeparator ?? "."
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        
+        let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
+        
+        if newValue != yieldRateString {
+            yieldRateString = newValue
+        }
+        
+        if let value = Double(cleanedInput) {
+            asset.yieldRate = value
+            if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
+                let formatted = formatNumber(value)
+                if formatted != yieldRateString && focusedField != .yieldRate {
+                    yieldRateString = formatted
+                }
+            }
+        } else if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.yieldRate = 0
+        }
+    }
+    
+    private func updateInflationString(_ newValue: String) {
+        let decimalSeparator = numberFormatter.decimalSeparator ?? "."
+        let groupingSeparator = numberFormatter.groupingSeparator ?? ","
+        
+        let cleanedInput = newValue.replacingOccurrences(of: groupingSeparator, with: "")
+        
+        if newValue != inflationString {
+            inflationString = newValue
+        }
+        
+        if let value = Double(cleanedInput) {
+            asset.inflation = value
+            if !newValue.isEmpty && !newValue.hasSuffix(decimalSeparator) {
+                let formatted = formatNumber(value)
+                if formatted != inflationString && focusedField != .inflation {
+                    inflationString = formatted
+                }
+            }
+        } else if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.inflation = nil
+        }
+    }
+    
+    private func updateInvestMonthsString(_ newValue: String) {
+        // For investMonths, only allow digits (no grouping, no decimal)
+        let filtered = newValue.filter { $0.isNumber }
+        if filtered != investMonthsString {
+            investMonthsString = filtered
+        }
+        if let value = Int(filtered) {
+            asset.investMonths = max(0, value)
+        } else if filtered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asset.investMonths = 0
+        }
+    }
+    
     // MARK: - Sync UI strings from model
     private func updateFieldsFromAsset() {
-        currentValueString = asset.currentValue == 0 ? "" : String(format: "%.2f", asset.currentValue)
-        monthlyContributionString = asset.monthlyContribution == 0 ? "" : String(format: "%.2f", asset.monthlyContribution)
-        growthRateString = asset.growthRate == 0 ? "" : String(format: "%.2f", asset.growthRate)
-        yieldRateString = asset.yieldRate == 0 ? "" : String(format: "%.2f", asset.yieldRate)
+        currentValueString = asset.currentValue == 0 ? "" : formatNumber(asset.currentValue)
+        monthlyContributionString = asset.monthlyContribution == 0 ? "" : formatNumber(asset.monthlyContribution)
+        growthRateString = asset.growthRate == 0 ? "" : formatNumber(asset.growthRate)
+        yieldRateString = asset.yieldRate == 0 ? "" : formatNumber(asset.yieldRate)
         investMonthsString = asset.investMonths == 0 ? "" : "\(asset.investMonths)"
-        inflationString = asset.inflation.map { String(format: "%.2f", $0) } ?? ""
+        inflationString = asset.inflation.map { formatNumber($0) } ?? ""
     }
-
-    // MARK: - Commit helpers
+    
+    // MARK: - Commit helpers (format on submit)
     private func commitCurrentValue() {
-        if let value = Double(currentValueString) {
+        if let value = parseDecimal(currentValueString) {
             asset.currentValue = max(0, value)
+            currentValueString = formatNumber(value)
         } else if currentValueString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.currentValue = 0
+            currentValueString = ""
         }
     }
 
     private func commitMonthlyContribution() {
-        if let value = Double(monthlyContributionString) {
+        if let value = parseDecimal(monthlyContributionString) {
             asset.monthlyContribution = max(0, value)
+            monthlyContributionString = formatNumber(value)
         } else if monthlyContributionString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.monthlyContribution = 0
+            monthlyContributionString = ""
         }
     }
 
     private func commitGrowthRate() {
-        if let value = Double(growthRateString) {
+        if let value = parseDecimal(growthRateString) {
             asset.growthRate = value
+            growthRateString = formatNumber(value)
         } else if growthRateString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.growthRate = 0
+            growthRateString = ""
         }
     }
 
     private func commitYieldRate() {
-        if let value = Double(yieldRateString) {
+        if let value = parseDecimal(yieldRateString) {
             asset.yieldRate = value
+            yieldRateString = formatNumber(value)
         } else if yieldRateString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.yieldRate = 0
+            yieldRateString = ""
         }
     }
 
     private func commitInvestMonths() {
-        if let value = Int(investMonthsString) {
+        let filtered = investMonthsString.filter { $0.isNumber }
+        if let value = Int(filtered) {
             asset.investMonths = max(0, value)
+            investMonthsString = "\(value)"
         } else if investMonthsString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.investMonths = 0
+            investMonthsString = ""
         }
     }
 
     private func commitInflation() {
-        if let value = Double(inflationString) {
+        if let value = parseDecimal(inflationString) {
             asset.inflation = value
+            inflationString = formatNumber(value)
         } else if inflationString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             asset.inflation = nil
+            inflationString = ""
         }
     }
 
@@ -151,8 +315,8 @@ struct AssetCardView: View {
         self._asset = asset
         self.onRemove = onRemove
 
-        _currentValueString = State(initialValue: asset.wrappedValue.currentValue == 0 ? "" : String(format: "%.2f", asset.wrappedValue.currentValue))
-        _monthlyContributionString = State(initialValue: asset.wrappedValue.monthlyContribution == 0 ? "" : String(format: "%.2f", asset.wrappedValue.monthlyContribution))
+        _currentValueString = State(initialValue: asset.wrappedValue.currentValue == 0 ? "" : { let f = NumberFormatter(); f.numberStyle = .decimal; f.usesGroupingSeparator = true; f.maximumFractionDigits = 2; return f.string(from: NSNumber(value: asset.wrappedValue.currentValue)) ?? String(asset.wrappedValue.currentValue) }())
+        _monthlyContributionString = State(initialValue: asset.wrappedValue.monthlyContribution == 0 ? "" : { let f = NumberFormatter(); f.numberStyle = .decimal; f.usesGroupingSeparator = true; f.maximumFractionDigits = 2; return f.string(from: NSNumber(value: asset.wrappedValue.monthlyContribution)) ?? String(asset.wrappedValue.monthlyContribution) }())
         _growthRateString = State(initialValue: asset.wrappedValue.growthRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.growthRate))
         _yieldRateString = State(initialValue: asset.wrappedValue.yieldRate == 0 ? "" : String(format: "%.2f", asset.wrappedValue.yieldRate))
         _investMonthsString = State(initialValue: asset.wrappedValue.investMonths == 0 ? "" : "\(asset.wrappedValue.investMonths)")
@@ -205,21 +369,36 @@ struct AssetCardView: View {
             // MARK: - Fields
             TextField("Enter current value", text: $currentValueString)
                 .keyboardType(.decimalPad)
-                .onChange(of: currentValueString) { commitCurrentValue() }
+                .onChange(of: currentValueString) { _, newValue in
+                    updateCurrentValueString(newValue)
+                }
+                .onSubmit {
+                    commitCurrentValue()
+                }
                 .focused($focusedField, equals: .currentValue)
                 .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .currentValue))
                 .animation(.easeInOut(duration: 0.25), value: asset.type)
 
             TextField("Monthly Contribution", text: $monthlyContributionString)
                 .keyboardType(.decimalPad)
-                .onChange(of: monthlyContributionString) { commitMonthlyContribution() }
+                .onChange(of: monthlyContributionString) { _, newValue in
+                    updateMonthlyContributionString(newValue)
+                }
+                .onSubmit {
+                    commitMonthlyContribution()
+                }
                 .focused($focusedField, equals: .monthlyContribution)
                 .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .monthlyContribution))
                 .animation(.easeInOut(duration: 0.25), value: asset.type)
 
             TextField("Annual growth rate (%)", text: $growthRateString)
                 .keyboardType(.decimalPad)
-                .onChange(of: growthRateString) { commitGrowthRate() }
+                .onChange(of: growthRateString) { _, newValue in
+                    updateGrowthRateString(newValue)
+                }
+                .onSubmit {
+                    commitGrowthRate()
+                }
                 .focused($focusedField, equals: .growthRate)
                 .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .growthRate))
                 .animation(.easeInOut(duration: 0.25), value: asset.type)
@@ -227,14 +406,24 @@ struct AssetCardView: View {
             HStack(spacing: 10) {
                 TextField("Annual yield (%) (optional)", text: $yieldRateString)
                     .keyboardType(.decimalPad)
-                    .onChange(of: yieldRateString) { commitYieldRate() }
+                    .onChange(of: yieldRateString) { _, newValue in
+                        updateYieldRateString(newValue)
+                    }
+                    .onSubmit {
+                        commitYieldRate()
+                    }
                     .focused($focusedField, equals: .yieldRate)
                     .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .yieldRate))
                     .animation(.easeInOut(duration: 0.25), value: asset.type)
 
                 TextField("Inflation (%) (optional)", text: $inflationString)
                     .keyboardType(.decimalPad)
-                    .onChange(of: inflationString) { commitInflation() }
+                    .onChange(of: inflationString) { _, newValue in
+                        updateInflationString(newValue)
+                    }
+                    .onSubmit {
+                        commitInflation()
+                    }
                     .focused($focusedField, equals: .inflation)
                     .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .inflation))
                     .animation(.easeInOut(duration: 0.25), value: asset.type)
@@ -242,7 +431,12 @@ struct AssetCardView: View {
 
             TextField("Investment months", text: $investMonthsString)
                 .keyboardType(.numberPad)
-                .onChange(of: investMonthsString) { commitInvestMonths() }
+                .onChange(of: investMonthsString) { _, newValue in
+                    updateInvestMonthsString(newValue)
+                }
+                .onSubmit {
+                    commitInvestMonths()
+                }
                 .focused($focusedField, equals: .investMonths)
                 .modifier(CardTextFieldStyle(assetType: asset.type, isFocused: focusedField == .investMonths))
                 .animation(.easeInOut(duration: 0.25), value: asset.type)
@@ -266,3 +460,4 @@ struct AssetCardView: View {
         .padding(.horizontal)
     }
 }
+
